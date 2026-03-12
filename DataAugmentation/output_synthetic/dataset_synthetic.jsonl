@@ -1,0 +1,1 @@
+{"image_path": "ticket_sintetico_0001.jpg", "ground_truth": "{\"comercio\": \"BP OIL ESPAÑA S.A.U.\", \"cif\": \"A-28003119\", \"fecha\": \"27/06/2024\", \"total\": 3.74, \"items\": [{\"descripcion\": \"BOLSA PATATAS\", \"precio\": 1.87}, {\"descripcion\": \"BOLSA PATATAS\", \"precio\": 1.87}]}"}
