@@ -68,13 +68,13 @@ def main():
     )
     parser.add_argument(
         '--original-jsonl',
-        default=str(Path(__file__).parent.parent / 'Deepseek OCR' / 'codigo' / 'dataset_espanol.jsonl'),
-        help='JSONL original con los tickets reales'
+        default=str(Path(__file__).parent / 'imagenes' / 'dataset_espanol_ampliado.jsonl'),
+        help='JSONL original con los tickets reales (default: ./imagenes/dataset_espanol_ampliado.jsonl)'
     )
     parser.add_argument(
         '--original-images',
-        default=str(Path(__file__).parent.parent / 'Deepseek OCR' / 'imagenes'),
-        help='Directorio con las imágenes originales'
+        default=str(Path(__file__).parent / 'imagenes'),
+        help='Directorio con las imágenes originales (default: ./imagenes)'
     )
     parser.add_argument(
         '--augmented-dir',
