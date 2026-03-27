@@ -43,10 +43,10 @@ def create_augmentation_pipeline():
         # Rota el ticket entre -180° y +180° para simular tickets
         # fotografiados en cualquier orientación (horizontal, al revés, etc.)
         A.Rotate(
-            limit=(-180, 180),
+            limit=(-15, 15),
             border_mode=cv2.BORDER_CONSTANT,
             fill=255,           # Relleno blanco en los bordes
-            p=0.8
+            p=0.6
         ),
 
         # ── PERSPECTIVA ───────────────────────────────────────────────
@@ -125,9 +125,7 @@ def create_augmentation_pipeline():
             p=0.2
         ),
 
-        # ── VOLTEO HORIZONTAL ─────────────────────────────────────────────
-        # Tickets reflejados (espejo) - edge case poco frecuente pero útil.
-        A.HorizontalFlip(p=0.1),
+
 
         # ── ESCALA DE GRISES ──────────────────────────────────────────────
         # Algunos tickets se escanean o fotocopian en B/N.
