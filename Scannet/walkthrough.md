@@ -86,3 +86,42 @@ npm run dev
 5. Hacer login con las credenciales creadas → debe entrar a `/`.
 
 > **Requisito previo:** tener `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` rellenos en `.env.local`.
+
+---
+
+## Fase 4 — Navegación
+
+### Qué se hizo
+
+**Archivos creados:**
+- `src/pages/Home.tsx` — Placeholder de la vista Gastos (Fase 5)
+- `src/pages/Scan.tsx` — Placeholder de la vista Escanear (Fase 6)
+- `src/pages/Cuenta.tsx` — Placeholder de la vista Cuenta (Fase 8)
+- `src/components/AppLayout.tsx` — Layout envolvente con Sidebar + BottomNav + Outlet + toggle de tema
+- `src/components/BottomNav.tsx` — Navegación inferior móvil, 56px, 3 ítems
+- `src/components/Sidebar.tsx` — Navegación lateral desktop, 64px, 3 iconos
+- `src/hooks/useTheme.ts` — Hook de tema claro/oscuro con persistencia en localStorage
+
+**Archivos modificados:**
+- `src/App.tsx` — Rutas protegidas agrupadas bajo AppLayout; rutas públicas sin layout
+
+### Decisiones tomadas
+
+- **ProtectedRoute como wrapper del layout**: `ProtectedRoute` envuelve `AppLayout` en `App.tsx`. Dado que `ProtectedRoute` renderiza `{children}` y `AppLayout` contiene `<Outlet />`, React Router resuelve las rutas anidadas correctamente.
+- **Toggle de tema en AppLayout**: El botón sol/luna vive en la esquina superior derecha del contenido principal. En Fase 8 se moverá al interior de la vista Cuenta.
+- **`useTheme` respeta `prefers-color-scheme`**: Si el usuario no tiene preferencia guardada en `localStorage`, se usa la preferencia del sistema operativo.
+- **Iconos SVG inline**: Sin dependencias externas de iconos para mantener el bundle ligero.
+- **`end` prop en NavLink de `/`**: Evita que la ruta raíz quede activa en todas las rutas.
+
+### Cómo probar
+
+```bash
+vercel dev   # Puerto 3000
+```
+
+1. Login con usuario existente → redirige a `/`
+2. Verificar que aparece la BottomNav en móvil (< 768px) y la Sidebar en desktop (≥ 768px)
+3. Navegar entre Gastos, Escanear y Cuenta — ítem activo resaltado en verde
+4. Pulsar el botón de tema (luna/sol) — la UI cambia con transición 200ms
+5. Recargar la página — el tema persiste
+6. Acceder a `/login` directamente — no muestra nav (ruta pública sin layout)

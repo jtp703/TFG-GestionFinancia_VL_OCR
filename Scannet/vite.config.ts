@@ -9,4 +9,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    // Proxy /api/* a vercel dev (puerto 3000) cuando se usa npm run dev
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
 })
