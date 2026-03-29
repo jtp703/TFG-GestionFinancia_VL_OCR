@@ -1,94 +1,52 @@
-# Plan — Fase 6: Escanear Ticket
+# Plan — Fase 7: Categorización
 
 ## Estado del código al inicio
-- `src/pages/Scan.tsx` — placeholder vacío
-- `api/tickets.ts` — ya existe (Fase 5)
-- `api/scan.ts` — no existe aún
-- Schema: tablas `ticket`, `producto` definidas con todos los campos necesarios
+- `api/scan.ts` — devuelve JSON del ticket sin categoría
+- `api/categorize.ts` — no existe aún
+- `src/hooks/useScan.ts` — función `guardar()` hace INSERT en `ticket` sin `categoria_id`
+- Tabla `categoria` — 6 filas fijas: Alimentación, Transporte, Ocio, Hogar, Salud, Otros
 
 ## Tareas Notion
 
 | # | Tarea | Estado |
 |---|-------|--------|
-| 6.1 | Estado 1: Visor de cámara (Web API) | Sin empezar |
-| 6.2 | Selector método de pago toggle (Efectivo / Tarjeta) | Sin empezar |
-| 6.3 | Vercel Function POST /api/scan (llamada a HuggingFace Inference API) | Sin empezar |
-| 6.4 | Estado 2: Tabla de verificación editable (campos inline) | Sin empezar |
-| 6.5 | Añadir / eliminar filas de producto en verificación | Sin empezar |
-| 6.6 | Guardar ticket + productos en Supabase (verificado=true) | Sin empezar |
-| 6.7 | Detección de duplicados (comercio + fecha + total) | Sin empezar |
-| 6.8 | Manejo de error OCR (Reintentar / Cancelar) | Sin empezar |
+| 7.1 | Vercel Function POST /api/categorize (llamada a DeepSeek API) | Sin empezar |
+| 7.2 | Integrar categorización en flujo post-OCR (tras /api/scan) | Sin empezar |
 
 ---
 
-## Flujo de la vista Scan
+## Flujo de categorización
 
 ```
-Estado IDLE
-  └─ Visor cámara + toggle método de pago + botón "Escanear"
-        │
-        ▼
-Estado LOADING
-  └─ Spinner "Procesando ticket..."
-        │
-        ├─ Error OCR → Estado ERROR (Reintentar / Cancelar)
-        │
-        ▼
-Estado VERIFY
-  └─ Tabla editable con datos OCR
-     - Comercio, fecha, total (editables)
-     - Tabla productos: descripcion, cantidad, precio (editables inline)
-     - Botones: + Añadir fila / × eliminar fila
-     - Alerta si duplicado detectado
-     - Botón "Confirmar y guardar"
-        │
-        ▼
-Estado SUCCESS
-  └─ Feedback "Ticket guardado" → redirige a /
+useScan.guardar(datos)
+  └─ POST /api/categorize { comercio }
+        └─ DeepSeek API → devuelve nombre de categoría
+              └─ SELECT id FROM categoria WHERE nombre = ?
+                    └─ INSERT ticket con categoria_id
 ```
+
+La categorización es transparente para el usuario — ocurre en `guardar()` antes del INSERT,
+sin pantalla adicional.
 
 ---
 
 ## Pasos de implementación
 
-### Paso 1 — Vercel Function POST /api/scan (Tarea 6.3)
-- Crear `api/scan.ts`
-- Recibe: multipart/form-data con `image` (archivo) + `metodo_pago`
-- Llama a HuggingFace Inference API con el modelo `HF_MODEL_ID`
-- Devuelve: JSON con `{ comercio, cif, fecha, total, items[] }`
+### Paso 1 — Vercel Function POST /api/categorize (Tarea 7.1)
+- Crear `api/categorize.ts`
+- Recibe: `{ comercio: string }` en el body JSON
+- Autenticación: JWT en header Authorization
+- Llama a DeepSeek API con un prompt que fuerza una de las 6 categorías fijas
+- Devuelve: `{ categoria: string }` — nombre exacto de la categoría
 
-### Paso 2 — Hook useScan
-- Crear `src/hooks/useScan.ts`
-- Gestiona el estado de la máquina: `idle | loading | verify | error | success`
-- Expone: `{ estado, resultado, error, metodo_pago, setMetodoPago, enviar, guardar, reintentar }`
-
-### Paso 3 — Vista Scan.tsx (Tareas 6.1 y 6.2)
-- Estado IDLE: `<video>` con stream de cámara (getUserMedia) + botón captura
-- Toggle Efectivo / Tarjeta debajo del visor
-- Botón "Escanear" envía la imagen capturada al hook
-
-### Paso 4 — Tabla de verificación (Tareas 6.4 y 6.5)
-- Componente `src/components/VerifyForm.tsx`
-- Campos cabecera editables: comercio, fecha, método de pago
-- Tabla productos con celdas editables inline
-- Botones añadir fila (+) y eliminar fila (×) por producto
-- Muestra alerta si se detecta duplicado
-
-### Paso 5 — Guardar en Supabase (Tareas 6.6 y 6.7)
+### Paso 2 — Integrar en useScan (Tarea 7.2)
 - En `useScan.ts`, función `guardar()`:
-  - Detecta duplicados: consulta ticket con mismo comercio + fecha + total
-  - Si no hay duplicado: INSERT en `ticket` + INSERT productos en `producto`
-  - Marca `verificado = true`
-
-### Paso 6 — Manejo de errores (Tarea 6.8)
-- Estado ERROR en la máquina de estados
-- Botón "Reintentar" (vuelve a idle con la misma imagen)
-- Botón "Cancelar" (vuelve a idle limpio)
+  1. Llamar a POST /api/categorize con el comercio
+  2. Obtener el `id` de la categoría desde Supabase
+  3. Añadir `categoria_id` al INSERT de `ticket`
 
 ---
 
 ## Archivos a crear/modificar
-- `api/scan.ts` (nuevo)
-- `src/hooks/useScan.ts` (nuevo)
-- `src/components/VerifyForm.tsx` (nuevo)
-- `src/pages/Scan.tsx` (modificar)
+- `api/categorize.ts` (nuevo)
+- `src/hooks/useScan.ts` (modificar — añadir llamada a /api/categorize en guardar())
