@@ -9,11 +9,11 @@ export function Scan() {
   const navigate    = useNavigate()
   const videoRef    = useRef<HTMLVideoElement>(null)
   const canvasRef   = useRef<HTMLCanvasElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [camError, setCamError] = useState<string | null>(null)
-  const [duplicado, setDuplicado] = useState(false)
 
-  const { estado, resultado, errorMsg, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
+  const { estado, resultado, errorMsg, duplicado, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
 
   // Iniciar cámara al montar (solo en estado idle)
   const startCamera = useCallback(async () => {
@@ -74,9 +74,11 @@ export function Scan() {
     }, 'image/jpeg', 0.92)
   }
 
-  async function handleGuardar(datos: Parameters<typeof guardar>[0]) {
-    setDuplicado(false)
-    await guardar(datos)
+  /** Selección de imagen desde galería/explorador */
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) enviar(file)
+    e.target.value = ''   // permite re-seleccionar el mismo archivo
   }
 
   // --- Render por estado ---
@@ -101,7 +103,7 @@ export function Scan() {
         <VerifyForm
           inicial={resultado}
           duplicado={duplicado}
-          onConfirmar={handleGuardar}
+          onConfirmar={guardar}
           onCancelar={cancelar}
         />
       </div>
@@ -191,8 +193,32 @@ export function Scan() {
           </div>
         </div>
 
-        {/* Botón de captura */}
-        <div className="flex justify-center">
+        {/* Botón de captura + subir imagen */}
+        <div className="flex items-center justify-center gap-6">
+          {/* Subir desde galería */}
+          <label
+            className="flex flex-col items-center gap-1 cursor-pointer transition-opacity hover:opacity-70"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <div className="w-11 h-11 rounded-full flex items-center justify-center"
+              style={{ border: '1.5px solid var(--border)', background: 'var(--surface)' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <span className="text-xs">Galería</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </label>
+
+          {/* Capturar con cámara */}
           <button
             onClick={capturar}
             disabled={!!camError}
@@ -200,7 +226,6 @@ export function Scan() {
             style={{ background: 'var(--color-brand)' }}
             aria-label="Escanear ticket"
           >
-            {/* Icono cámara */}
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
@@ -209,7 +234,7 @@ export function Scan() {
         </div>
       </div>
 
-      {/* Canvas oculto para captura */}
+      {/* Canvas oculto para captura de cámara */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   )

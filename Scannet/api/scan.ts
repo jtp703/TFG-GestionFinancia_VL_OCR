@@ -1,30 +1,37 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import formidable from 'formidable'
-import fs from 'fs'
-
-export const config = { api: { bodyParser: false } }
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-/** Parsea el multipart/form-data y devuelve { fields, files } */
-function parseForm(req: VercelRequest): Promise<{ fields: formidable.Fields; files: formidable.Files }> {
-  return new Promise((resolve, reject) => {
-    const form = formidable({ maxFileSize: 10 * 1024 * 1024 })
-    form.parse(req, (err, fields, files) => {
-      if (err) reject(err)
-      else resolve({ fields, files })
-    })
-  })
+/** Ticket de prueba para modo mock */
+const MOCK_RESULT = {
+  comercio: 'MERCADONA, S.A.',
+  cif:      'A-46103834',
+  fecha:    '15/03/2025',
+  total:    24.50,
+  items: [
+    { descripcion: 'LECHE ENTERA HACENDADO 1L', cantidad: 2, precio: 0.89 },
+    { descripcion: 'PAN DE MOLDE TIERNO',       cantidad: 1, precio: 1.45 },
+    { descripcion: 'PECHUGA PAVO LONCHAS',       cantidad: 1, precio: 2.35 },
+    { descripcion: 'ACEITE OLIVA VIRGEN 1L',     cantidad: 1, precio: 4.99 },
+    { descripcion: 'YOGUR NATURAL PACK 8',       cantidad: 2, precio: 1.89 },
+    { descripcion: 'FRUTA VARIADA KG',           cantidad: 1, precio: 3.20 },
+  ],
 }
 
-/** POST /api/scan — recibe imagen, llama a HuggingFace Inference API, devuelve JSON del ticket */
+/** POST /api/scan — recibe imagen en base64, llama a HuggingFace Inference API, devuelve JSON del ticket */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Modo mock — responde inmediatamente sin autenticar ni llamar al modelo
+  if (process.env.USE_MOCK_OCR === 'true') {
+    const metodo_pago = req.body?.metodo_pago ?? 'efectivo'
+    return res.status(200).json({ ...MOCK_RESULT, metodo_pago })
   }
 
   // Autenticar usuario
@@ -34,37 +41,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token)
   if (authError || !user) return res.status(401).json({ error: 'Token inválido' })
 
-  // Parsear multipart
-  let fields: formidable.Fields
-  let files: formidable.Files
-  try {
-    ({ fields, files } = await parseForm(req))
-  } catch {
-    return res.status(400).json({ error: 'Error al procesar el formulario' })
-  }
+  const { image, metodo_pago, mimeType: mime } = req.body ?? {}
+  if (!image) return res.status(400).json({ error: 'No se recibió imagen' })
 
-  const imageFile = Array.isArray(files.image) ? files.image[0] : files.image
-  if (!imageFile) return res.status(400).json({ error: 'No se recibió imagen' })
+  // La imagen llega como data URL o base64 puro
+  const dataUrl: string = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`
+  const base64Image = dataUrl.split(',')[1]
+  const mimeType: string = mime ?? (dataUrl.match(/data:([^;]+)/)?.[1] ?? 'image/jpeg')
+  const metodoPago: string = metodo_pago ?? 'efectivo'
 
-  const metodoPago = Array.isArray(fields.metodo_pago)
-    ? fields.metodo_pago[0]
-    : (fields.metodo_pago ?? 'efectivo')
-
-  // Leer imagen y convertir a base64
-  const imageBuffer = fs.readFileSync(imageFile.filepath)
-  const base64Image = imageBuffer.toString('base64')
-  const mimeType = imageFile.mimetype ?? 'image/jpeg'
-
-  // Llamar a HuggingFace Inference API
+  // Llamar a HuggingFace Inference API — chat completions (image-text-to-text)
   const hfToken = process.env.HF_API_TOKEN
-  const modelId = process.env.HF_MODEL_ID ?? 'Lacax/Tickets'
+  const modelId = process.env.HF_MODEL_ID ?? 'Lacax/deepseek_ocr_lora'
 
   if (!hfToken) return res.status(500).json({ error: 'HF_API_TOKEN no configurado' })
 
   let ocrResult: any
   try {
     const hfResponse = await fetch(
-      `https://api-inference.huggingface.co/models/${modelId}`,
+      `https://api-inference.huggingface.co/models/${modelId}/v1/chat/completions`,
       {
         method: 'POST',
         headers: {
@@ -72,10 +67,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inputs: {
-            image: `data:${mimeType};base64,${base64Image}`,
-            question: 'Extrae los datos del ticket: comercio, CIF, fecha, total e items con descripcion, cantidad y precio.',
-          },
+          model: modelId,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: { url: `data:${mimeType};base64,${base64Image}` },
+                },
+                {
+                  type: 'text',
+                  text: 'Extrae los datos de este ticket español en formato JSON con estos campos exactos: {"comercio": "", "cif": "", "fecha": "DD/MM/YYYY", "total": 0.00, "items": [{"descripcion": "", "cantidad": 1, "precio": 0.00}]}. Devuelve solo el JSON, sin texto adicional.',
+                },
+              ],
+            },
+          ],
+          max_tokens: 1000,
         }),
       }
     )
@@ -87,8 +95,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const raw = await hfResponse.json()
 
-    // El modelo devuelve texto JSON — parsearlo
-    const text: string = raw?.generated_text ?? raw?.answer ?? JSON.stringify(raw)
+    // Extraer el texto de la respuesta chat completions
+    const text: string =
+      raw?.choices?.[0]?.message?.content ??
+      raw?.generated_text ??
+      raw?.answer ??
+      JSON.stringify(raw)
+
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return res.status(422).json({ error: 'El modelo no devolvió JSON válido', raw: text })
 

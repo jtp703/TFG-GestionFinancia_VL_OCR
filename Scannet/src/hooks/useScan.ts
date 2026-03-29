@@ -21,29 +21,54 @@ export interface ResultadoOCR {
 type Estado = 'idle' | 'loading' | 'verify' | 'error' | 'success'
 
 interface UseScanReturn {
-  estado:       Estado
-  resultado:    ResultadoOCR | null
-  errorMsg:     string | null
-  metodoPago:   MetodoPago
+  estado:        Estado
+  resultado:     ResultadoOCR | null
+  errorMsg:      string | null
+  duplicado:     boolean
+  metodoPago:    MetodoPago
   setMetodoPago: (m: MetodoPago) => void
-  enviar:       (imageBlob: Blob) => Promise<void>
-  guardar:      (datos: ResultadoOCR) => Promise<void>
-  reintentar:   () => void
-  cancelar:     () => void
+  enviar:        (imageBlob: Blob) => Promise<void>
+  guardar:       (datos: ResultadoOCR) => Promise<void>
+  reintentar:    () => void
+  cancelar:      () => void
 }
 
 export function useScan(): UseScanReturn {
-  const [estado, setEstado]         = useState<Estado>('idle')
-  const [resultado, setResultado]   = useState<ResultadoOCR | null>(null)
-  const [errorMsg, setErrorMsg]     = useState<string | null>(null)
-  const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo')
+  const [estado, setEstado]             = useState<Estado>('idle')
+  const [resultado, setResultado]       = useState<ResultadoOCR | null>(null)
+  const [errorMsg, setErrorMsg]         = useState<string | null>(null)
+  const [duplicado, setDuplicado]       = useState(false)
+  const [metodoPago, setMetodoPago]     = useState<MetodoPago>('efectivo')
   const [ultimaImagen, setUltimaImagen] = useState<Blob | null>(null)
 
-  /** Envía la imagen al endpoint /api/scan */
+  /** Envía la imagen al endpoint /api/scan (o devuelve mock si VITE_USE_MOCK_OCR=true) */
   async function enviar(imageBlob: Blob) {
     setUltimaImagen(imageBlob)
     setEstado('loading')
     setErrorMsg(null)
+    setDuplicado(false)
+
+    // Mock frontend — no necesita vercel dev ni conexión al modelo
+    if (import.meta.env.VITE_USE_MOCK_OCR === 'true') {
+      await new Promise(r => setTimeout(r, 800)) // simula latencia
+      setResultado({
+        comercio:    'MERCADONA, S.A.',
+        cif:         'A-46103834',
+        fecha:       '15/03/2025',
+        total:       24.50,
+        items: [
+          { descripcion: 'LECHE ENTERA HACENDADO 1L', cantidad: 2, precio: 0.89 },
+          { descripcion: 'PAN DE MOLDE TIERNO',        cantidad: 1, precio: 1.45 },
+          { descripcion: 'PECHUGA PAVO LONCHAS',        cantidad: 1, precio: 2.35 },
+          { descripcion: 'ACEITE OLIVA VIRGEN 1L',      cantidad: 1, precio: 4.99 },
+          { descripcion: 'YOGUR NATURAL PACK 8',        cantidad: 2, precio: 1.89 },
+          { descripcion: 'FRUTA VARIADA KG',            cantidad: 1, precio: 3.20 },
+        ],
+        metodo_pago: metodoPago,
+      })
+      setEstado('verify')
+      return
+    }
 
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -52,15 +77,22 @@ export function useScan(): UseScanReturn {
       return
     }
 
-    const form = new FormData()
-    form.append('image', imageBlob, 'ticket.jpg')
-    form.append('metodo_pago', metodoPago)
+    // Convertir blob a base64
+    const arrayBuffer = await imageBlob.arrayBuffer()
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
     try {
       const response = await fetch('/api/scan', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: form,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image:       base64,
+          mimeType:    imageBlob.type || 'image/jpeg',
+          metodo_pago: metodoPago,
+        }),
       })
 
       const data = await response.json()
@@ -79,7 +111,31 @@ export function useScan(): UseScanReturn {
     }
   }
 
-  /** Guarda el ticket verificado en Supabase, detectando duplicados previamente */
+  /** Sube la imagen a Supabase Storage y devuelve la URL, o null si falla */
+  async function subirImagen(blob: Blob, userId: string): Promise<string | null> {
+    try {
+      const path = `${userId}/${Date.now()}.jpg`
+      const { error } = await supabase.storage
+        .from('tickets')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+      if (error) return null
+      const { data } = supabase.storage.from('tickets').getPublicUrl(path)
+      return data.publicUrl ?? null
+    } catch {
+      return null
+    }
+  }
+
+  /** Convierte fecha DD/MM/YYYY → YYYY-MM-DD para Supabase */
+  function toISODate(fecha: string): string {
+    const parts = fecha.split('/')
+    if (parts.length === 3 && parts[0].length === 2) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`
+    }
+    return fecha // ya está en formato ISO o desconocido
+  }
+
+  /** Guarda el ticket verificado en Supabase */
   async function guardar(datos: ResultadoOCR) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -88,23 +144,26 @@ export function useScan(): UseScanReturn {
       return
     }
 
-    // Detectar duplicado por comercio + fecha + total
+    const fechaISO = toISODate(datos.fecha)
+
+    // Detectar duplicado por comercio + fecha (total no está en el schema)
     const { data: duplicados } = await supabase
       .from('ticket')
       .select('id')
       .eq('usuario_id', session.user.id)
       .eq('comercio', datos.comercio)
-      .eq('fecha', datos.fecha)
-      .eq('total', datos.total)
+      .eq('fecha', fechaISO)
       .limit(1)
 
     if (duplicados && duplicados.length > 0) {
-      setErrorMsg('Ya existe un ticket con el mismo comercio, fecha y total.')
-      setEstado('error')
+      setDuplicado(true)
+      setEstado('verify')   // se queda en verify con el banner de aviso
       return
     }
 
-    // Categorizar el comercio vía DeepSeek
+    setDuplicado(false)
+
+    // Categorizar el comercio vía DeepSeek (degradación suave si falla)
     let categoriaId: string | null = null
     try {
       const catResponse = await fetch('/api/categorize', {
@@ -125,8 +184,13 @@ export function useScan(): UseScanReturn {
         categoriaId = catRow?.id ?? null
       }
     } catch {
-      // Si la categorización falla, se guarda el ticket sin categoría
+      // Fallo silencioso — el ticket se guarda sin categoría
     }
+
+    // Subir imagen a Supabase Storage (degradación suave si falla)
+    const imagenUrl = ultimaImagen
+      ? await subirImagen(ultimaImagen, session.user.id)
+      : null
 
     // Insertar ticket
     const { data: ticket, error: ticketError } = await supabase
@@ -134,11 +198,12 @@ export function useScan(): UseScanReturn {
       .insert({
         usuario_id:    session.user.id,
         comercio:      datos.comercio,
-        fecha:         datos.fecha,
+        fecha:         fechaISO,
         metodo_pago:   datos.metodo_pago,
         verificado:    true,
         json_extraido: datos,
         categoria_id:  categoriaId,
+        imagen_url:    imagenUrl,
       })
       .select('id')
       .single()
@@ -180,8 +245,9 @@ export function useScan(): UseScanReturn {
     setEstado('idle')
     setResultado(null)
     setErrorMsg(null)
+    setDuplicado(false)
     setUltimaImagen(null)
   }
 
-  return { estado, resultado, errorMsg, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar }
+  return { estado, resultado, errorMsg, duplicado, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar }
 }
