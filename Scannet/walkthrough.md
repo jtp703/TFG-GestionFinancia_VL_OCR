@@ -125,3 +125,60 @@ vercel dev   # Puerto 3000
 4. Pulsar el botón de tema (luna/sol) — la UI cambia con transición 200ms
 5. Recargar la página — el tema persiste
 6. Acceder a `/login` directamente — no muestra nav (ruta pública sin layout)
+
+---
+
+## Fase 5 — Gestionar Gastos
+
+### Qué se hizo
+
+**Archivos creados:**
+- `api/tickets.ts` — Vercel Function GET /api/tickets: autentica con JWT, consulta tickets+productos+categoría del mes en curso, devuelve totales por categoría y total del mes
+- `src/hooks/useTickets.ts` — hook que consume /api/tickets con el token de sesión y expone `tickets`, `totalesPorCategoria`, `totalMes`, `loading`, `error`, `refetch`
+- `src/components/EmptyState.tsx` — pantalla vacía con ilustración y CTA "Escanear ticket" → `/scan`
+- `src/components/DonutChart.tsx` — gráfico Recharts PieChart con innerRadius/outerRadius, total del mes centrado en texto absoluto
+- `src/components/CategoriaList.tsx` — lista ordenada por importe: punto de color + nombre + porcentaje + importe; al pulsar abre drill-down
+- `src/components/DrillDown.tsx` — panel deslizante: móvil pantalla completa, desktop 360px desde la derecha; transición 200ms; lista de tickets de la categoría
+
+**Archivos modificados:**
+- `src/pages/Home.tsx` — monta DonutChart + CategoriaList + DrillDown; gestiona estado de carga, error, vacío y categoría seleccionada
+- `.env.local` — añadida variable `SUPABASE_URL` (sin prefijo VITE_) para uso en Vercel Functions
+
+### Decisiones tomadas
+
+- **Cálculo del total en servidor**: `api/tickets.ts` suma `precio_total` de los productos para calcular el total por ticket y por categoría, evitando cálculos en el frontend.
+- **Colores de categoría como constante compartida**: `CATEGORY_COLORS` duplicado en `DonutChart` y `CategoriaList` — suficiente para v1.0, extraíble a constante global si crece.
+- **DrillDown siempre en el DOM**: el panel usa `transform: translateX(100%)` cuando está cerrado en lugar de montar/desmontar, para que la animación de entrada/salida sea suave.
+- **`window.fetch` en useTickets**: se usa `window.fetch` explícitamente para evitar colisión de nombres con la función `fetch` definida en el hook.
+
+### Cómo probar
+
+```bash
+vercel dev   # Puerto 3000 — necesario para que /api/tickets funcione
+```
+
+1. Login → la vista `/` muestra spinner mientras carga
+2. Sin tickets → aparece EmptyState con botón "Escanear ticket"
+3. Con tickets → aparece donut chart + lista de categorías
+4. Pulsar una categoría → panel DrillDown se desliza desde la derecha
+5. Pulsar "Volver" o el overlay → panel se cierra con animación 200ms
+
+### Tarea adicional — Colores de categoría adaptativos (RUI-03.3)
+
+**Archivos creados:**
+- `src/lib/categoryColors.ts` — paleta pastel (claro) y eléctrica (oscuro) por categoría; función `getCategoryColor(nombre, isDark)`
+
+**Archivos modificados:**
+- `src/components/DonutChart.tsx` — usa `getCategoryColor` + `useTheme`
+- `src/components/CategoriaList.tsx` — ídem
+
+Los colores cambian en tiempo real al pulsar el toggle de tema.
+
+---
+
+## Pendiente para la próxima sesión
+
+> **Retomar desde aquí:** Fase 5 completada al 100% (incluyendo colores adaptativos).
+> El mock de datos está activo (`USE_MOCK = true` en `src/hooks/useTickets.ts`) — útil para previsualizar sin backend.
+> **Siguiente fase: Fase 6 — Escanear Ticket** (8 tareas en Notion, todas Sin empezar).
+> Antes de empezar: crear `plan.md` para Fase 6.

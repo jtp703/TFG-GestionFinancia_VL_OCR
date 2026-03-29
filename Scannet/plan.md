@@ -1,70 +1,71 @@
-# Plan — Fase 4: Navegación
+# Plan — Fase 5: Gestionar Gastos
 
 ## Estado del código al inicio
-- `react-router-dom` ya instalado (v6)
-- `BrowserRouter` + rutas públicas ya configuradas en `App.tsx`
-- CSS variables + transición 200ms de tema ya definidas en `index.css`
-- Clase `.dark` ya presente en `index.css`
+- `src/pages/Home.tsx` — placeholder vacío
+- `api/` — carpeta vacía, ninguna Function creada aún
+- Recharts ya instalado en package.json
+- Schema: tablas `ticket`, `producto`, `categoria` definidas
 
 ## Tareas Notion
 
 | # | Tarea | Estado |
 |---|-------|--------|
-| 4.1 | Router principal con React Router | Sin empezar |
-| 4.2 | Bottom nav móvil (56px, iconos + labels) | Sin empezar |
-| 4.3 | Sidebar desktop (64px, 3 iconos apilados) | Sin empezar |
-| 4.4 | Sistema de temas claro/oscuro (CSS variables + transición 200ms) | Sin empezar |
+| 5.1 | Estado vacío con CTA a Scanner | Sin empezar |
+| 5.2 | Vercel Function GET /api/tickets (mes en curso) | Sin empezar |
+| 5.3 | Lista de categorías con porcentaje e importe | Sin empezar |
+| 5.4 | Donut chart con Recharts (innerRadius, total en centro) | Sin empezar |
+| 5.5 | Panel drill-down móvil (pantalla completa, botón volver) | Sin empezar |
+| 5.6 | Panel drill-down desktop (slide desde derecha 200ms) | Sin empezar |
 
 ---
 
 ## Pasos de implementación
 
-### Paso 1 — Crear páginas stub (Home, Scan, Cuenta)
-- `src/pages/Home.tsx` → vista placeholder de Gastos
-- `src/pages/Scan.tsx` → vista placeholder de Escáner
-- `src/pages/Cuenta.tsx` → vista placeholder de Cuenta
-- Estas páginas se rellenarán en fases posteriores
+### Paso 1 — Vercel Function GET /api/tickets (Tarea 5.2)
+- Crear `api/tickets.ts`
+- Recibe: header `Authorization` con el JWT del usuario
+- Consulta en Supabase: tickets del mes en curso con sus productos y categoría
+- Devuelve: array de tickets con `{ id, comercio, fecha, total, categoria, productos[] }`
+- Calcula el total por categoría en el servidor
 
-### Paso 2 — Router principal (Tarea 4.1)
-- Actualizar `App.tsx` con rutas protegidas: `/` (Home), `/scan` (Scan), `/cuenta` (Cuenta)
-- Layout envolvente `AppLayout` que renderiza nav + `<Outlet />`
-- Rutas públicas sin layout (/login, /registro, /onboarding)
+### Paso 2 — Hook useTickets (consumo del API)
+- Crear `src/hooks/useTickets.ts`
+- Llama a GET /api/tickets con el token de sesión
+- Expone: `{ tickets, totalesPorCategoria, totalMes, loading, error, refetch }`
 
-### Paso 3 — Bottom nav móvil (Tarea 4.2)
-- Crear `src/components/BottomNav.tsx`
-- 56px de alto, fijo en bottom, 3 ítems: Gastos / Scan / Cuenta
-- Ítem activo resaltado con `--color-brand`
-- Solo visible en móvil (`md:hidden`)
+### Paso 3 — Estado vacío (Tarea 5.1)
+- Componente `src/components/EmptyState.tsx`
+- Ilustración simple + texto "Aún no tienes gastos este mes" + botón "Escanear ticket" → `/scan`
 
-### Paso 4 — Sidebar desktop (Tarea 4.3)
-- Crear `src/components/Sidebar.tsx`
-- 64px de ancho, fijo en left, 3 iconos apilados verticalmente
-- Solo visible en desktop (`hidden md:flex`)
+### Paso 4 — Donut chart (Tarea 5.4)
+- Componente `src/components/DonutChart.tsx`
+- Recharts `PieChart` con `innerRadius` y `outerRadius`
+- Total del mes en el centro (texto absoluto)
+- Colores por categoría definidos como constante
 
-### Paso 5 — Hook y toggle de tema (Tarea 4.4)
-- Crear `src/hooks/useTheme.ts` → gestiona clase `.dark` en `<html>`, persiste en `localStorage`
-- Añadir toggle en `AppLayout` (o donde sea visible)
+### Paso 5 — Lista de categorías (Tarea 5.3)
+- Componente `src/components/CategoriaList.tsx`
+- Cada ítem: punto de color + nombre + porcentaje + importe
+- Al pulsar → abre el drill-down de esa categoría
 
-### Paso 6 — Crear `AppLayout`
-- `src/components/AppLayout.tsx` → contenedor con Sidebar + BottomNav + `<Outlet />`
-- Margen izquierdo en desktop para compensar sidebar
+### Paso 6 — Panel drill-down (Tareas 5.5 y 5.6)
+- Componente `src/components/DrillDown.tsx`
+- Móvil: ocupa pantalla completa con botón "← Volver"
+- Desktop: slide desde la derecha, 200ms, ancho ~360px
+- Muestra lista de tickets de la categoría seleccionada con comercio, fecha e importe
+
+### Paso 7 — Montar todo en Home.tsx
+- Si `loading` → spinner
+- Si sin tickets → `<EmptyState />`
+- Si hay tickets → `<DonutChart />` + `<CategoriaList />` + `<DrillDown />`
 
 ---
 
-## Orden de ejecución
-1. Páginas stub
-2. AppLayout + rutas en App.tsx
-3. BottomNav
-4. Sidebar
-5. useTheme + toggle
-6. Verificar navegación completa
-
 ## Archivos a crear/modificar
-- `src/pages/Home.tsx` (nuevo)
-- `src/pages/Scan.tsx` (nuevo)
-- `src/pages/Cuenta.tsx` (nuevo)
-- `src/components/AppLayout.tsx` (nuevo)
-- `src/components/BottomNav.tsx` (nuevo)
-- `src/components/Sidebar.tsx` (nuevo)
-- `src/hooks/useTheme.ts` (nuevo)
-- `src/App.tsx` (modificar)
+- `api/tickets.ts` (nuevo)
+- `src/hooks/useTickets.ts` (nuevo)
+- `src/components/EmptyState.tsx` (nuevo)
+- `src/components/DonutChart.tsx` (nuevo)
+- `src/components/CategoriaList.tsx` (nuevo)
+- `src/components/DrillDown.tsx` (nuevo)
+- `src/pages/Home.tsx` (modificar)
