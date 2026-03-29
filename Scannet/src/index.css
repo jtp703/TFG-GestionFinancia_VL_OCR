@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS custom properties — tokens de diseño */
+:root {
+  --bg:            #F7F5F0;
+  --surface:       #FFFFFF;
+  --color-brand:   #0E6B55;
+  --color-brand-dark: #0A4F3E;
+  --color-brand-light: #E6F5F1;
+  --text-primary:  #111111;
+  --text-muted:    #6B7280;
+  --border:        rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  --bg:            #1A1F2E;
+  --surface:       #252B3B;
+  --text-primary:  #F0F0F0;
+  --text-muted:    #9CA3AF;
+  --border:        rgba(255, 255, 255, 0.08);
+}
+
+/* Transición global de tema */
+*, *::before, *::after {
+  transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  background-color: var(--bg);
+  color: var(--text-primary);
+}

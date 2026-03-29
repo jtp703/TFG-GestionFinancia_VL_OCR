@@ -290,8 +290,8 @@ Ejemplos de uso:
     )
     parser.add_argument(
         '--input', '-i',
-        default=str(Path(__file__).parent.parent / 'Deepseek OCR' / 'imagenes'),
-        help='Directorio con las imágenes originales (default: ../Deepseek OCR/imagenes)'
+        default=str(Path(__file__).parent / 'imagenes'),
+        help='Directorio con las imágenes originales (default: ./imagenes)'
     )
     parser.add_argument(
         '--output', '-o',
@@ -300,8 +300,8 @@ Ejemplos de uso:
     )
     parser.add_argument(
         '--jsonl', '-j',
-        default=str(Path(__file__).parent.parent / 'Deepseek OCR' / 'codigo' / 'dataset_espanol.jsonl'),
-        help='Ruta al archivo JSONL con las etiquetas (default: ../Deepseek OCR/codigo/dataset_espanol.jsonl)'
+        default=str(Path(__file__).parent / 'imagenes' / 'dataset_espanol_ampliado.jsonl'),
+        help='Ruta al archivo JSONL con las etiquetas (default: ./imagenes/dataset_espanol_ampliado.jsonl)'
     )
     parser.add_argument(
         '--num-augments', '-n',
