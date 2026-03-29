@@ -176,9 +176,54 @@ Los colores cambian en tiempo real al pulsar el toggle de tema.
 
 ---
 
+---
+
+## Fase 6 — Escanear Ticket
+
+### Qué se hizo
+
+**Archivos creados:**
+- `api/scan.ts` — Vercel Function POST /api/scan: autentica con JWT, parsea multipart/form-data con `formidable`, llama a HuggingFace Inference API, extrae JSON del texto devuelto y lo devuelve normalizado
+- `src/hooks/useScan.ts` — máquina de estados (`idle | loading | verify | error | success`): gestiona captura, llamada al API, detección de duplicados y guardado en Supabase
+- `src/components/VerifyForm.tsx` — tabla de verificación editable post-OCR: campos cabecera (comercio, fecha, método), tabla de productos con edición inline, añadir/eliminar filas, total calculado, alerta de duplicado
+
+**Archivos modificados:**
+- `src/pages/Scan.tsx` — implementación completa con 5 estados visuales: visor de cámara (getUserMedia), spinner de carga, tabla de verificación, pantalla de error y confirmación de éxito
+
+**Dependencias añadidas:**
+- `formidable` + `@types/formidable` — parsing de multipart en la Vercel Function
+
+### Decisiones tomadas
+
+- **Máquina de estados en `useScan`**: Los 5 estados (`idle/loading/verify/error/success`) se gestionan en un único hook para mantener la lógica centralizada y la vista como render puro.
+- **Detección de duplicados en cliente (Supabase directo)**: La comprobación de duplicados (comercio + fecha + total) se hace desde `useScan` usando el cliente Supabase del frontend con el JWT del usuario, sin necesitar un endpoint adicional.
+- **Canvas oculto para captura**: Se usa un `<canvas>` oculto para capturar un frame del `<video>` y convertirlo a Blob JPEG, evitando dependencias externas.
+- **`formidable` para multipart en Vercel Functions**: La Function desactiva el body parser nativo de Vercel (`export const config = { api: { bodyParser: false } }`) y usa `formidable` para leer la imagen y el campo `metodo_pago`.
+- **Parseo robusto de la respuesta OCR**: El modelo puede devolver el JSON dentro de texto libre; se extrae con regex `/\{[\s\S]*\}/` para tolerar prefijos/sufijos de texto.
+
+### Cómo probar
+
+```bash
+vercel dev   # Puerto 3000 — necesario para que /api/scan funcione
+```
+
+1. Login → navegar a `/scan`
+2. Conceder permisos de cámara → aparece el visor con marco de encuadre
+3. Seleccionar método de pago con el toggle
+4. Pulsar el botón de captura → spinner "Procesando ticket…"
+5. Resultado → tabla de verificación editable con datos del OCR
+6. Editar campos si hay errores → pulsar "Confirmar y guardar"
+7. Aparece confirmación "✓ Ticket guardado" → redirige a `/` tras 1.5s
+8. Si el OCR falla → pantalla de error con "Reintentar" y "Cancelar"
+
+> **Requisito previo:** `HF_API_TOKEN` y `HF_MODEL_ID` rellenos en `.env.local`.
+> Para probar sin el modelo real, el endpoint devuelve error 502 que activa el estado de error — flujo también verificable.
+
+---
+
 ## Pendiente para la próxima sesión
 
-> **Retomar desde aquí:** Fase 5 completada al 100% (incluyendo colores adaptativos).
-> El mock de datos está activo (`USE_MOCK = true` en `src/hooks/useTickets.ts`) — útil para previsualizar sin backend.
-> **Siguiente fase: Fase 6 — Escanear Ticket** (8 tareas en Notion, todas Sin empezar).
-> Antes de empezar: crear `plan.md` para Fase 6.
+> **Retomar desde aquí:** Fase 6 completada al 100%.
+> **Siguiente fase: Fase 7 — Categorización** (2 tareas en Notion, ambas Sin empezar).
+> Tareas: `api/categorize.ts` (POST /api/categorize → DeepSeek API) + integrar categorización en flujo post-OCR (tras /api/scan).
+> Antes de empezar: actualizar `plan.md` para Fase 7.
