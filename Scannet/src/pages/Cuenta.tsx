@@ -5,8 +5,9 @@ import { useTheme } from '../hooks/useTheme'
 
 /** Devuelve las 2 primeras iniciales de un email */
 function initials(email: string): string {
+  if (!email) return '?'
   const parts = email.split('@')[0].split(/[._-]/)
-  return parts.slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || email[0].toUpperCase()
+  return parts.slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?'
 }
 
 /** Vista de cuenta: avatar, email, toggle de tema y logout */
@@ -42,16 +43,39 @@ export function Cuenta() {
 
       {/* Toggle de tema */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Tema oscuro</span>
+        <span className="text-sm font-medium">Tema</span>
         <button
           onClick={toggle}
           aria-label="Cambiar tema"
-          className="relative w-11 h-6 rounded-full transition-colors duration-200"
+          className="relative w-14 h-7 rounded-full overflow-hidden transition-colors duration-200"
           style={{ background: theme === 'dark' ? 'var(--color-brand)' : 'var(--border)' }}
         >
+          {/* Icono sol — visible en modo claro */}
+          <svg
+            className="absolute left-1.5 top-1/2 -translate-y-1/2 transition-opacity duration-200"
+            style={{ opacity: theme === 'dark' ? 0 : 1 }}
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+          {/* Icono luna — visible en modo oscuro */}
+          <svg
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 transition-opacity duration-200"
+            style={{ opacity: theme === 'dark' ? 1 : 0 }}
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+          {/* Bolita deslizante */}
           <span
-            className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-            style={{ transform: theme === 'dark' ? 'translateX(20px)' : 'translateX(0)' }}
+            className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200"
+            style={{ transform: theme === 'dark' ? 'translateX(30px)' : 'translateX(2px)' }}
           />
         </button>
       </div>

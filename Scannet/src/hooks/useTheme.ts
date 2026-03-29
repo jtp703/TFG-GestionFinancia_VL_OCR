@@ -3,12 +3,16 @@ import { supabase } from '@/lib/supabaseClient'
 
 type Theme = 'light' | 'dark'
 
+// Flag a nivel de módulo: la sincronización con Supabase solo ocurre una vez por carga de página,
+// independientemente de cuántas instancias del hook se monten.
+let _supabaseSynced = false
+
 function readThemeFromDOM(): Theme {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
 /** Gestiona el tema claro/oscuro.
- *  Prioridad al cargar: perfil_usuario (Supabase) > localStorage > prefers-color-scheme.
+ *  Prioridad al cargar (una vez por sesión): perfil_usuario (Supabase) > localStorage > prefers-color-scheme.
  *  Persiste en localStorage y en perfil_usuario al cambiar.
  *  MutationObserver sincroniza todas las instancias del hook en tiempo real. */
 export function useTheme() {
@@ -18,18 +22,21 @@ export function useTheme() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
 
-  // Al montar: leer tema guardado en perfil_usuario y aplicarlo si difiere
+  // Leer tema_oscuro de Supabase solo una vez por carga de página
   useEffect(() => {
+    if (_supabaseSynced) return
+    _supabaseSynced = true
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
       const { data } = await supabase
         .from('perfil_usuario')
-        .select('tema_preferido')
+        .select('tema_oscuro')
         .eq('id', session.user.id)
         .single()
-      if (data?.tema_preferido && data.tema_preferido !== theme) {
-        setTheme(data.tema_preferido as Theme)
-      }
+      if (data == null) return
+      const remoto: Theme = data.tema_oscuro ? 'dark' : 'light'
+      if (remoto !== readThemeFromDOM()) setTheme(remoto)
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -56,7 +63,7 @@ export function useTheme() {
       if (!session) return
       supabase
         .from('perfil_usuario')
-        .update({ tema_preferido: next })
+        .update({ tema_oscuro: next === 'dark' })
         .eq('id', session.user.id)
     })
   }
