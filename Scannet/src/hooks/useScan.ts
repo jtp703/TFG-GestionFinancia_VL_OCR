@@ -104,6 +104,30 @@ export function useScan(): UseScanReturn {
       return
     }
 
+    // Categorizar el comercio vía DeepSeek
+    let categoriaId: string | null = null
+    try {
+      const catResponse = await fetch('/api/categorize', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ comercio: datos.comercio }),
+      })
+      if (catResponse.ok) {
+        const { categoria } = await catResponse.json()
+        const { data: catRow } = await supabase
+          .from('categoria')
+          .select('id')
+          .eq('nombre', categoria)
+          .single()
+        categoriaId = catRow?.id ?? null
+      }
+    } catch {
+      // Si la categorización falla, se guarda el ticket sin categoría
+    }
+
     // Insertar ticket
     const { data: ticket, error: ticketError } = await supabase
       .from('ticket')
@@ -114,6 +138,7 @@ export function useScan(): UseScanReturn {
         metodo_pago:   datos.metodo_pago,
         verificado:    true,
         json_extraido: datos,
+        categoria_id:  categoriaId,
       })
       .select('id')
       .single()

@@ -8,6 +8,7 @@ Recoge qué se hizo, decisiones tomadas y cómo probar cada parte.
 ## Fase 1 — Setup del proyecto
 
 ### Qué se hizo
+
 - Creado `package.json` con dependencias definitivas: React 18, Vite 5, TypeScript, Tailwind 3, React Router 6, Recharts, Supabase JS.
 - Configurado `tsconfig.json` con alias `@/*` → `./src/*` para imports limpios.
 - Creado `vite.config.ts` con el mismo alias de rutas.
@@ -19,10 +20,12 @@ Recoge qué se hizo, decisiones tomadas y cómo probar cada parte.
 - Creada estructura de carpetas: `src/components`, `src/pages`, `src/hooks`, `src/lib`, `api/`, `database/`, `public/`.
 
 ### Decisiones
+
 - Se creó el proyecto manualmente en lugar de usar `npm create vite` porque el CLI es interactivo y el directorio ya tenía ficheros (CLAUDE.md, etc.).
 - `darkMode: 'class'` en Tailwind para controlar el tema añadiendo/quitando la clase `dark` en `<html>`.
 
 ### Cómo probar
+
 ```bash
 cd Scannet
 npm install
@@ -35,6 +38,7 @@ npm run dev     # app vacía en http://localhost:5173
 ## Fase 2 — Base de datos
 
 ### Qué se hizo
+
 - Creado `database/schema.sql` con las 4 tablas definitivas:
   - `categoria` — categorías fijas del sistema.
   - `perfil_usuario` — vinculada a `auth.users` con los datos del onboarding y preferencia de tema.
@@ -46,11 +50,13 @@ npm run dev     # app vacía en http://localhost:5173
 - Creado `src/lib/supabaseClient.ts` — instancia única del cliente Supabase para el frontend, usando `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 
 ### Decisiones
+
 - `perfil_usuario.id` es el mismo UUID que `auth.users.id` (no una FK separada) para simplificar los joins.
 - El trigger usa `SECURITY DEFINER` para poder insertar en `perfil_usuario` sin que el RLS lo bloquee durante el registro.
 - Las categorías usan `ON CONFLICT (nombre) DO NOTHING` para que el script sea re-ejecutable sin errores.
 
 ### Cómo probar
+
 1. Ir a Supabase → SQL Editor → pegar y ejecutar `database/schema.sql`.
 2. Verificar en Table Editor que existen las 4 tablas y que `categoria` tiene 6 filas.
 3. Registrar un usuario de prueba desde Supabase Auth → comprobar que se crea automáticamente su fila en `perfil_usuario`.
@@ -60,6 +66,7 @@ npm run dev     # app vacía en http://localhost:5173
 ## Fase 3 — Autenticación
 
 ### Qué se hizo
+
 - **`src/hooks/useAuth.ts`** — hook centralizado que:
   - Carga la sesión al montar con `getSession()`.
   - Escucha cambios en tiempo real con `onAuthStateChange`.
@@ -71,14 +78,17 @@ npm run dev     # app vacía en http://localhost:5173
 - **`src/App.tsx`** — router principal con rutas públicas (`/login`, `/registro`, `/onboarding`) y ruta protegida (`/`) envuelta en `ProtectedRoute`.
 
 ### Decisiones
+
 - El onboarding guarda `null` en los campos omitidos, no cadenas vacías, para mantener la semántica de "no respondido".
 - `signUp` de Supabase crea el usuario en `auth.users`, el trigger de Fase 2 crea su `perfil_usuario` automáticamente — el onboarding solo hace `UPDATE`, nunca `INSERT`.
 - Los estilos de inputs usan `style` inline con variables CSS en lugar de clases Tailwind para que hereden correctamente el tema claro/oscuro sin necesidad de purga manual.
 
 ### Cómo probar
+
 ```bash
 npm run dev
 ```
+
 1. Navegar a `http://localhost:5173` → debe redirigir a `/login`.
 2. Ir a `/registro` → crear una cuenta → debe redirigir a `/onboarding`.
 3. Completar u omitir los 3 pasos → debe redirigir a `/` (placeholder "en construcción").
@@ -94,6 +104,7 @@ npm run dev
 ### Qué se hizo
 
 **Archivos creados:**
+
 - `src/pages/Home.tsx` — Placeholder de la vista Gastos (Fase 5)
 - `src/pages/Scan.tsx` — Placeholder de la vista Escanear (Fase 6)
 - `src/pages/Cuenta.tsx` — Placeholder de la vista Cuenta (Fase 8)
@@ -103,6 +114,7 @@ npm run dev
 - `src/hooks/useTheme.ts` — Hook de tema claro/oscuro con persistencia en localStorage
 
 **Archivos modificados:**
+
 - `src/App.tsx` — Rutas protegidas agrupadas bajo AppLayout; rutas públicas sin layout
 
 ### Decisiones tomadas
@@ -133,6 +145,7 @@ vercel dev   # Puerto 3000
 ### Qué se hizo
 
 **Archivos creados:**
+
 - `api/tickets.ts` — Vercel Function GET /api/tickets: autentica con JWT, consulta tickets+productos+categoría del mes en curso, devuelve totales por categoría y total del mes
 - `src/hooks/useTickets.ts` — hook que consume /api/tickets con el token de sesión y expone `tickets`, `totalesPorCategoria`, `totalMes`, `loading`, `error`, `refetch`
 - `src/components/EmptyState.tsx` — pantalla vacía con ilustración y CTA "Escanear ticket" → `/scan`
@@ -141,8 +154,9 @@ vercel dev   # Puerto 3000
 - `src/components/DrillDown.tsx` — panel deslizante: móvil pantalla completa, desktop 360px desde la derecha; transición 200ms; lista de tickets de la categoría
 
 **Archivos modificados:**
+
 - `src/pages/Home.tsx` — monta DonutChart + CategoriaList + DrillDown; gestiona estado de carga, error, vacío y categoría seleccionada
-- `.env.local` — añadida variable `SUPABASE_URL` (sin prefijo VITE_) para uso en Vercel Functions
+- `.env.local` — añadida variable `SUPABASE_URL` (sin prefijo VITE\_) para uso en Vercel Functions
 
 ### Decisiones tomadas
 
@@ -166,9 +180,11 @@ vercel dev   # Puerto 3000 — necesario para que /api/tickets funcione
 ### Tarea adicional — Colores de categoría adaptativos (RUI-03.3)
 
 **Archivos creados:**
+
 - `src/lib/categoryColors.ts` — paleta pastel (claro) y eléctrica (oscuro) por categoría; función `getCategoryColor(nombre, isDark)`
 
 **Archivos modificados:**
+
 - `src/components/DonutChart.tsx` — usa `getCategoryColor` + `useTheme`
 - `src/components/CategoriaList.tsx` — ídem
 
@@ -183,14 +199,17 @@ Los colores cambian en tiempo real al pulsar el toggle de tema.
 ### Qué se hizo
 
 **Archivos creados:**
+
 - `api/scan.ts` — Vercel Function POST /api/scan: autentica con JWT, parsea multipart/form-data con `formidable`, llama a HuggingFace Inference API, extrae JSON del texto devuelto y lo devuelve normalizado
 - `src/hooks/useScan.ts` — máquina de estados (`idle | loading | verify | error | success`): gestiona captura, llamada al API, detección de duplicados y guardado en Supabase
 - `src/components/VerifyForm.tsx` — tabla de verificación editable post-OCR: campos cabecera (comercio, fecha, método), tabla de productos con edición inline, añadir/eliminar filas, total calculado, alerta de duplicado
 
 **Archivos modificados:**
+
 - `src/pages/Scan.tsx` — implementación completa con 5 estados visuales: visor de cámara (getUserMedia), spinner de carga, tabla de verificación, pantalla de error y confirmación de éxito
 
 **Dependencias añadidas:**
+
 - `formidable` + `@types/formidable` — parsing de multipart en la Vercel Function
 
 ### Decisiones tomadas
@@ -221,9 +240,81 @@ vercel dev   # Puerto 3000 — necesario para que /api/scan funcione
 
 ---
 
+---
+
+## Fase 7 — Categorización
+
+### Qué se hizo
+
+**Archivos creados:**
+
+- `api/categorize.ts` — Vercel Function POST /api/categorize: autentica con JWT, llama a DeepSeek API con un prompt que fuerza la respuesta a una de las 6 categorías fijas, valida la respuesta y devuelve `{ categoria }`
+
+**Archivos modificados:**
+
+- `src/hooks/useScan.ts` — función `guardar()` ahora llama a `/api/categorize` antes del INSERT, resuelve el `categoria_id` y lo incluye en el ticket. Si la categorización falla, el ticket se guarda sin categoría (degradación suave)
+
+**Bug corregido (mismo commit):**
+
+- `src/hooks/useTheme.ts` — añadido `MutationObserver` sobre `<html class>` para que todas las instancias del hook se sincronicen al cambiar el tema; los colores del donut y la lista ahora se actualizan en tiempo real
+
+### Decisiones tomadas
+
+- **`temperature: 0` en DeepSeek**: Elimina aleatoriedad — la categorización es determinista para un mismo comercio.
+- **Validación de la respuesta con `includes`**: El modelo puede devolver la categoría con mayúsculas distintas o rodeada de espacios; se compara en minúsculas contra el catálogo fijo y se cae a `'Otros'` si no encaja.
+- **Degradación suave en categorización**: Si `/api/categorize` falla (red, cuota, API key ausente), el ticket se guarda igualmente con `categoria_id = null` — no se bloquea el flujo del usuario.
+- **Categorización fuera de `/api/scan`**: Módulo separado según las reglas de desarrollo — `scan.ts` solo hace OCR, `categorize.ts` solo categoriza.
+
+### Cómo probar
+
+```bash
+vercel dev   # Puerto 3000
+```
+
+1. Escanear un ticket → confirmar en la pantalla de verificación
+2. El ticket guardado debe aparecer en `/` bajo la categoría asignada por DeepSeek
+3. Sin `DEEPSEEK_API_KEY` configurada → el ticket se guarda en "Sin categoría" (sin error para el usuario)
+
+> **Requisito previo:** `DEEPSEEK_API_KEY` en `.env.local`.
+
+---
+
+---
+
+## Fase 8 — Cuenta
+
+### Qué se hizo
+
+**Archivos modificados:**
+- `src/pages/Cuenta.tsx` — implementación completa: avatar circular con iniciales del email (fondo brand), email del usuario, toggle de tema tipo switch, botón "Cerrar sesión" y modal de confirmación con overlay
+- `src/hooks/useTheme.ts` — al montar lee `tema_preferido` de `perfil_usuario` en Supabase y lo aplica; al hacer toggle persiste el nuevo valor en Supabase de forma asíncrona (sin bloquear la UI)
+- `src/components/AppLayout.tsx` — eliminado el toggle de tema (ahora vive en Cuenta)
+
+### Decisiones tomadas
+
+- **Toggle tipo switch (pill)**: Más intuitivo que el botón sol/luna del AppLayout para una vista de ajustes.
+- **Persistencia asíncrona del tema**: El `setTheme` es síncrono (la UI cambia al instante); el UPDATE a Supabase se hace en segundo plano sin `await` para no añadir latencia perceptible.
+- **Prioridad de carga del tema**: Supabase > localStorage > `prefers-color-scheme`. Si no hay sesión activa (usuario no logado), se usa localStorage.
+- **Modal inline en Cuenta.tsx**: No justifica un componente separado al ser de un solo uso.
+- **Overlay cierra el modal**: Clic fuera de la card cancela sin necesidad de botón adicional.
+
+### Cómo probar
+
+```bash
+vercel dev   # Puerto 3000
+```
+
+1. Navegar a `/cuenta` → aparece avatar con iniciales + email
+2. Pulsar el switch → tema cambia con transición; recargar → persiste (Supabase + localStorage)
+3. Iniciar sesión desde otro dispositivo → el tema guardado en Supabase se aplica automáticamente
+4. Pulsar "Cerrar sesión" → aparece modal de confirmación
+5. Confirmar → redirige a `/login`; cancelar → cierra el modal
+
+---
+
 ## Pendiente para la próxima sesión
 
-> **Retomar desde aquí:** Fase 6 completada al 100%.
-> **Siguiente fase: Fase 7 — Categorización** (2 tareas en Notion, ambas Sin empezar).
-> Tareas: `api/categorize.ts` (POST /api/categorize → DeepSeek API) + integrar categorización en flujo post-OCR (tras /api/scan).
-> Antes de empezar: actualizar `plan.md` para Fase 7.
+> **Retomar desde aquí:** Fase 8 completada al 100%.
+> **Siguiente fase: Fase 9 — QA y Deploy** (4 tareas en Notion, todas Sin empezar).
+> Tareas: configurar variables en Vercel, deploy a producción, pruebas en navegadores, flujo completo con `vercel dev`.
+> Antes de empezar: actualizar `plan.md` para Fase 9.
