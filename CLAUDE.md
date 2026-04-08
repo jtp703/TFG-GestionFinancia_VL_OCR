@@ -68,4 +68,3 @@ nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader
 
 ## Contexto adicional
 - Ver @Scannet/CLAUDE.md para todo lo relativo a la aplicación web
-- Deadline del TFG: 31 de marzo
