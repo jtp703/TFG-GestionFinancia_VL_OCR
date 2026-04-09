@@ -1,4 +1,5 @@
 import os
+import sys
 from PIL import Image
 try:
     from pillow_heif import register_heif_opener
@@ -23,7 +24,7 @@ def procesar_imagenes(ruta_carpeta, nuevo_nombre_base, extension_destino='.jpg')
 
     print(f"Procesando {len(archivos)} archivos. Se guardarán en: {carpeta_salida}")
 
-    for i, nombre_original in enumerate(archivos, start=1):
+    for i, nombre_original in enumerate(archivos, start=67):
         # Crear el nuevo nombre con ceros a la izquierda (001, 002...)
         nuevo_nombre = f"{nuevo_nombre_base}_{i:03d}{extension_destino}"
         
@@ -42,9 +43,16 @@ def procesar_imagenes(ruta_carpeta, nuevo_nombre_base, extension_destino='.jpg')
             print(f"✘ Error con {nombre_original}: {e}")
 
 # --- CONFIGURACIÓN ---
-mi_ruta = r'C:\Users\Jonni\Desktop\Universidad Almeria\Universidad Almeria\TFG\Dataset\Imagenes' # Pon aquí la ruta de tu carpeta
-nombre_deseado = 'recibo_almeria'     # El nombre base que quieras
-formato_final = '.jpg'              # Puedes poner .png, .jpg, .webp, etc.
+# Se pueden pasar como argumentos: python renombrar.py <ruta_carpeta> <nombre_base> [formato]
+# O usar los valores por defecto hardcodeados.
+if len(sys.argv) >= 3:
+    mi_ruta = sys.argv[1]
+    nombre_deseado = sys.argv[2]
+    formato_final = sys.argv[3] if len(sys.argv) >= 4 else '.jpg'
+else:
+    mi_ruta = r'C:\Users\Jonni\Desktop\Universidad Almeria\Universidad Almeria\TFG\Dataset\Imagenes\v2'
+    nombre_deseado = 'recibo_almeria'
+    formato_final = '.jpg'
 
 # Ejecutar
 if os.path.exists(mi_ruta):

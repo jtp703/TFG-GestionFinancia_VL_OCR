@@ -290,8 +290,8 @@ Ejemplos de uso:
     )
     parser.add_argument(
         '--input', '-i',
-        default=str(Path(__file__).parent / 'imagenes'),
-        help='Directorio con las imágenes originales (default: ./imagenes)'
+        default=None,
+        help='Directorio con las imágenes originales (OBLIGATORIO). Ejemplo: DataAugmentation/imagenes'
     )
     parser.add_argument(
         '--output', '-o',
@@ -322,6 +322,8 @@ Ejemplos de uso:
     )
 
     args = parser.parse_args()
+    if args.input is None:
+        parser.error("--input es obligatorio. Ejemplo: DataAugmentation/imagenes")
 
     # Fijar semilla si se proporcionó
     if args.seed is not None:

@@ -77,9 +77,15 @@ export function useScan(): UseScanReturn {
       return
     }
 
-    // Convertir blob a base64
+    // Convertir blob a base64 en chunks para evitar stack overflow con imágenes grandes
     const arrayBuffer = await imageBlob.arrayBuffer()
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
+    const chunkSize = 8192
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+    }
+    const base64 = btoa(binary)
 
     try {
       const response = await fetch('/api/scan', {

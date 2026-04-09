@@ -24,8 +24,8 @@ def main():
     parser.add_argument('--token', '-t', required=True, help='Tu HuggingFace token (write)')
     parser.add_argument(
         '--dataset-dir',
-        default=r'F:\datasetTickets\dataset_final',
-        help='Directorio del dataset final'
+        default=None,
+        help='Directorio del dataset final construido con build_dataset.py (OBLIGATORIO). Ejemplo: F:\\datasetTickets\\dataset_final_v2'
     )
     parser.add_argument(
         '--repo-id',
@@ -40,6 +40,8 @@ def main():
     )
 
     args = parser.parse_args()
+    if args.dataset_dir is None:
+        parser.error("--dataset-dir es obligatorio. Ejemplo: F:\\datasetTickets\\dataset_final_v2")
     dataset_dir = Path(args.dataset_dir)
 
     # Login
@@ -55,10 +57,11 @@ def main():
         exist_ok=True
     )
 
-    # Renombrar dataset_final.jsonl → dataset_espanol.jsonl para compatibilidad
+    # Renombrar dataset_final.jsonl → dataset_espanol_ampliado.jsonl
+    # El notebook V4 busca exactamente este nombre en el repo de HuggingFace
     jsonl_src = dataset_dir / "dataset_final.jsonl"
-    jsonl_dst = dataset_dir / "dataset_espanol.jsonl"
-    if jsonl_src.exists() and not jsonl_dst.exists():
+    jsonl_dst = dataset_dir / "dataset_espanol_ampliado.jsonl"
+    if jsonl_src.exists():
         import shutil
         shutil.copy2(jsonl_src, jsonl_dst)
         print(f"   📄 Copiado {jsonl_src.name} → {jsonl_dst.name}")
@@ -78,10 +81,10 @@ def main():
     print(f"   🔗 https://huggingface.co/datasets/{args.repo_id}")
     print(f"\n   Estructura en HuggingFace:")
     print(f"   {args.repo_id}/")
-    print(f"   ├── dataset_espanol.jsonl  (717 entradas)")
-    print(f"   ├── original/             (47 imágenes)")
-    print(f"   ├── augmented/            (470 imágenes)")
-    print(f"   └── synthetic/            (200 imágenes)")
+    print(f"   ├── dataset_espanol_ampliado.jsonl  ← buscado por el notebook V4")
+    print(f"   ├── original/")
+    print(f"   ├── augmented/")
+    print(f"   └── synthetic/")
 
 
 if __name__ == '__main__':
