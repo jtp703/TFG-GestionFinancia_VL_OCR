@@ -78,7 +78,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 },
                 {
                   type: 'text',
-                  text: 'Extrae los datos de este ticket español en formato JSON con estos campos exactos: {"comercio": "", "cif": "", "fecha": "DD/MM/YYYY", "total": 0.00, "items": [{"descripcion": "", "cantidad": 1, "precio": 0.00}]}. Devuelve solo el JSON, sin texto adicional.',
+                  // Prompt exacto de entrenamiento — no modificar sin reentrenar el modelo
+                  text: 'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\nNO other text. ONLY valid JSON.',
                 },
               ],
             },
@@ -105,7 +106,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return res.status(422).json({ error: 'El modelo no devolvió JSON válido', raw: text })
 
-    ocrResult = JSON.parse(jsonMatch[0])
+    // Normalizar puntuación unicode que el modelo genera en imágenes degradadas
+    const normalized = jsonMatch[0]
+      .replace(/，/g, ',')
+      .replace(/：/g, ':')
+      .replace(/\u201c|\u201d/g, '"')
+
+    ocrResult = JSON.parse(normalized)
   } catch (err: any) {
     return res.status(502).json({ error: `Fallo al llamar al modelo: ${err.message}` })
   }
@@ -115,7 +122,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     cif:         ocrResult.cif        ?? '',
     fecha:       ocrResult.fecha      ?? '',
     total:       ocrResult.total      ?? 0,
-    items:       ocrResult.items      ?? [],
+    items:       (ocrResult.items ?? []).map((item: any) => ({
+      ...item,
+      cantidad: Number(item.cantidad) || 1,
+      precio:   Number(item.precio)   || 0,
+    })),
     metodo_pago: metodoPago,
   })
 }
