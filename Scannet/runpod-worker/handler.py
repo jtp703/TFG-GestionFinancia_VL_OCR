@@ -48,7 +48,7 @@ NO other text. ONLY valid JSON."""
 
 # ── Descarga del modelo base si no está en caché ─────────────────────────────
 print("[worker] Verificando modelo base en cache...")
-if not os.path.exists(f"{LOCAL_DIR}/config.json"):
+if not os.path.exists(f"{LOCAL_DIR}/model-00001-of-000001.safetensors"):
     print("[worker] Descargando unsloth/DeepSeek-OCR-2 (primera vez — varios GB)...")
     snapshot_download(BASE_MODEL_ID, local_dir=LOCAL_DIR)
     print("[worker] Descarga completa.")

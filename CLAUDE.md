@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Leer al inicio de cada sesión
 
 **Dominio modelo/ML** — leer siempre estos archivos antes de trabajar en entrenamiento, inferencia o deploy del modelo:
+
 - `memory/bot/activeContext.md` — estado actual y próxima acción
 - `memory/bot/progress.md` — qué se hizo y qué está pendiente
 - `memory/bot/decisions.md` — decisiones técnicas vigentes (NO cuestionar sin motivo)
@@ -14,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `memory/bot/datasets.md` — estructura del dataset y pipeline
 
 **Dominio web** — si la sesión toca Scannet o el deploy, leer también:
+
 - `Scannet/memory/bot/activeContext.md`
 - `Scannet/memory/bot/progress.md`
 - `Scannet/memory/bot/decisions.md`
@@ -23,6 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Flujo de trabajo — dominio modelo/ML
 
 ### Al iniciar sesión
+
 1. Leer `memory/bot/activeContext.md` y `memory/bot/progress.md`
 2. Consultar Notion para confirmar tareas activas
 3. Revisar `Documentacion/plan.md` con el usuario antes de escribir código
@@ -31,18 +34,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **1. `memory/bot/` — actualizar el archivo correspondiente** (Claude lo lee)
 
-| Tarea | Archivo |
-|-------|---------|
-| Experimento / entrenamiento | `experiments.md` (con fecha) |
-| Decisión de arquitectura | `decisions.md` (con fecha) |
-| Tarea general | `progress.md` (con fecha) |
-| Cambio de foco | Reescribir `activeContext.md` |
+| Tarea                       | Archivo                       |
+| --------------------------- | ----------------------------- |
+| Experimento / entrenamiento | `experiments.md` (con fecha)  |
+| Decisión de arquitectura    | `decisions.md` (con fecha)    |
+| Tarea general               | `progress.md` (con fecha)     |
+| Cambio de foco              | Reescribir `activeContext.md` |
 
 **2. `Documentacion/plan.md` — marcar completado, mostrar siguiente** (el usuario lo ve)
+
 - Marcar la tarea como `✅`
 - Dejar visible cuál es la siguiente tarea pendiente
 
 **3. `Documentacion/walkthrough.md` — append al final** (log para el usuario, Claude no lo lee)
+
 - Añadir una sección con: qué se hizo, decisiones tomadas, cómo verificar
 - Solo añadir al final, nunca reescribir lo anterior
 
@@ -142,9 +147,14 @@ El progreso del desarrollo se rastrea en un tablero Notion externo llamnado tare
 **Al inicio de cada conversación de desarrollo, consultar Notion antes de escribir código.**
 
 ### Credenciales
+
 ```
-NOTION_TOKEN=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
-NOTION_DATABASE_ID=331f05904a318199914cc213984ed132
+Definir en `.env.local` para desarrollo local y en el panel de Vercel para producción.
+Nunca hardcodear secrets en el código.
+
+NOTION_TOKEN=
+NOTION_DATABASE_ID=
+NOTION_DATABASE_ID_DEV=
 NOTION_PAGE_URL=https://www.notion.so/Scannet-331f05904a3180f58caeed24bb8cceec
 ```
 
