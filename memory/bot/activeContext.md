@@ -17,7 +17,3 @@
 
 Fase 4 del plan de despliegue: test con `curl` usando 3 tickets reales.
 Ver criterio: `Scannet/Documentation/plan_despliegue_inferencia.md` §Fase 5.
-
-## Presupuesto RunPod
-
-$10.91 gastado. Revisar saldo antes de retomar.

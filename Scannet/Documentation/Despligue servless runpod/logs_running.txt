@@ -1,0 +1,25 @@
+2026-04-11T13:29:44.897327207Z ==========
+2026-04-11T13:29:44.897329819Z == CUDA ==
+2026-04-11T13:29:44.897390820Z ==========
+2026-04-11T13:29:44.901204858Z CUDA Version 12.1.1
+2026-04-11T13:29:44.902111914Z Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+2026-04-11T13:29:44.904163473Z This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+2026-04-11T13:29:44.904169733Z By pulling and using the container, you accept the terms and conditions of this license:
+2026-04-11T13:29:44.904174139Z https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+2026-04-11T13:29:44.904182606Z A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+2026-04-11T13:29:50.522368243Z [worker] Cargando modelo base (unsloth/DeepSeek-OCR-2, público)...
+2026-04-11T13:29:50.811425624Z Encountered exception while importing matplotlib: No module named 'matplotlib'
+2026-04-11T13:29:50.812618370Z Traceback (most recent call last):
+2026-04-11T13:29:50.812639984Z   File "/app/handler.py", line 43, in <module>
+2026-04-11T13:29:50.812647941Z     model = AutoModel.from_pretrained(
+2026-04-11T13:29:50.812652351Z   File "/usr/local/lib/python3.10/dist-packages/transformers/models/auto/auto_factory.py", line 549, in from_pretrained
+2026-04-11T13:29:50.812657047Z     config, kwargs = AutoConfig.from_pretrained(
+2026-04-11T13:29:50.812661090Z   File "/usr/local/lib/python3.10/dist-packages/transformers/models/auto/configuration_auto.py", line 1302, in from_pretrained
+2026-04-11T13:29:50.812665197Z     config_class = get_class_from_dynamic_module(
+2026-04-11T13:29:50.812669867Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 569, in get_class_from_dynamic_module
+2026-04-11T13:29:50.812674330Z     final_module = get_cached_module_file(
+2026-04-11T13:29:50.812678570Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 392, in get_cached_module_file
+2026-04-11T13:29:50.812682727Z     modules_needed = check_imports(resolved_module_file)
+2026-04-11T13:29:50.812686741Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 224, in check_imports
+2026-04-11T13:29:50.812690887Z     raise ImportError(
+2026-04-11T13:29:50.812695767Z ImportError: This modeling file requires the following packages that were not found in your environment: matplotlib. Run `pip install matplotlib`
