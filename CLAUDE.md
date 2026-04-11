@@ -20,16 +20,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **En tareas de deploy** (RunPod ↔ scan.ts ↔ Vercel): leer ambas memorias completas.
 
-## Actualizar memoria al completar tareas
+## Flujo de trabajo — dominio modelo/ML
 
-| Tarea completada | Archivo a actualizar |
-|------------------|----------------------|
-| Experimento / entrenamiento | `memory/bot/experiments.md` (con fecha) |
-| Decisión de arquitectura ML | `memory/bot/decisions.md` (con fecha) |
-| Tarea general modelo | `memory/bot/progress.md` (con fecha) |
-| Cambio de foco modelo | Reescribir `memory/bot/activeContext.md` |
+### Al iniciar sesión
+1. Leer `memory/bot/activeContext.md` y `memory/bot/progress.md`
+2. Consultar Notion para confirmar tareas activas
+3. Revisar `Documentacion/plan.md` con el usuario antes de escribir código
 
-Hacer el commit de los archivos bot/ junto al código en el mismo commit.
+### Al completar cada tarea — 3 pasos obligatorios en orden
+
+**1. `memory/bot/` — actualizar el archivo correspondiente** (Claude lo lee)
+
+| Tarea | Archivo |
+|-------|---------|
+| Experimento / entrenamiento | `experiments.md` (con fecha) |
+| Decisión de arquitectura | `decisions.md` (con fecha) |
+| Tarea general | `progress.md` (con fecha) |
+| Cambio de foco | Reescribir `activeContext.md` |
+
+**2. `Documentacion/plan.md` — marcar completado, mostrar siguiente** (el usuario lo ve)
+- Marcar la tarea como `✅`
+- Dejar visible cuál es la siguiente tarea pendiente
+
+**3. `Documentacion/walkthrough.md` — append al final** (log para el usuario, Claude no lo lee)
+- Añadir una sección con: qué se hizo, decisiones tomadas, cómo verificar
+- Solo añadir al final, nunca reescribir lo anterior
+
+**Commit:** los tres archivos + el código, en el mismo commit. Formato: `tipo(model): descripción`
 
 ## Descripción general
 
@@ -59,7 +76,7 @@ TFG/
 
 ## Reglas globales
 
-- Plataforma de entrenamiento: RunPod con RTX 4090. NO sugerir otras plataformas.
+- Plataforma de entrenamiento: RunPod con RTX 4090. NO sugerir otras plataformas a menos que lo pida el usuario.
 - El JSONL usa JSON anidado **sin escapar** en el campo `ground_truth`. Siempre usar el parser regex existente (en `augment_images.py`), nunca `json.loads()` directo sobre la línea completa.
 - NO tocar `DataAugmentation/imagenes/` a mano — es la fuente de verdad de los tickets reales (el count crece; ver `dataset_espanol_ampliado.jsonl` para el total actual).
 - Modelo base: DeepSeek-VL con LoRA r=32. No cambiar hiperparámetros sin consultar.
@@ -146,7 +163,7 @@ Al comenzar cualquier sesión de desarrollo:
 - Al **completar** una tarea: actualizar su estado a `Hecho` en Notion.
 - Al **completar una fase entera**: confirmar con el usuario antes de pasar a la siguiente.
 
-### Docker
+## Docker
 
 Debido al consumo de tiempo, memoria ram y recursos. Es estrictamente necesario que cada build de docker se realice estanto muy seguro de que tiene que hacerse.
 

@@ -1,47 +1,48 @@
-# Plan — Fase 8: Cuenta
+# Scannet — Plan de desarrollo
 
-## Estado del código al inicio
-- `src/pages/Cuenta.tsx` — placeholder vacío
-- `src/hooks/useTheme.ts` — toggle funciona, persiste en localStorage pero NO en perfil_usuario
-- `src/hooks/useAuth.ts` — expone `user`, `session`, `signOut`
-- `src/components/AppLayout.tsx` — contiene el toggle de tema; en esta fase se mueve a Cuenta
+> Actualizado: 2026-04-11 | Rama: `Feature-App-Stack`
 
-## Tareas Notion
+---
+
+## Estado de fases
+
+| Fase | Nombre | Estado |
+|------|--------|--------|
+| 1 | Setup | ✅ |
+| 2 | Base de datos | ✅ |
+| 3 | Autenticación | ✅ |
+| 4 | Navegación | ✅ |
+| 5 | Gestionar Gastos | ✅ |
+| 6 | Escanear Ticket | ✅ |
+| 7 | Categorización | ✅ |
+| 8 | Cuenta | ✅ |
+| 8.1 | Mejoras pre-deploy | ✅ |
+| **9** | **QA y Deploy** | **⏳ Siguiente** |
+
+---
+
+## Fase actual — 9: QA y Deploy
+
+### Prerequisitos antes de empezar
+
+- [ ] Worker RunPod operativo
+  - [ ] Container Disk → 20 GB en RunPod dashboard (sin rebuild)
+  - [ ] Fix check caché handler.py → rebuild → push
+- [ ] Bucket `tickets` privado creado en Supabase Storage
+- [ ] Probar flujo completo con `vercel dev` + imagen real de ticket
+
+### Tareas
 
 | # | Tarea | Estado |
 |---|-------|--------|
-| 8.1 | Vista Cuenta (avatar iniciales + email del usuario) | Sin empezar |
-| 8.2 | Toggle tema oscuro (persiste en perfil_usuario en Supabase) | Sin empezar |
-| 8.3 | Modal de confirmación logout | Sin empezar |
+| 9.1 | QA end-to-end en local (`vercel dev`) | ⏳ |
+| 9.2 | Configurar variables de entorno en Vercel dashboard | ⏳ |
+| 9.3 | Deploy en Vercel (`Feature-App-Stack` como rama de producción) | ⏳ |
+| 9.4 | Smoke test en producción con ticket real | ⏳ |
 
----
+### Notas
 
-## Pasos de implementación
-
-### Paso 1 — Vista Cuenta + avatar (Tarea 8.1)
-- Implementar `src/pages/Cuenta.tsx`
-- Avatar circular con las iniciales del email (2 letras, fondo brand)
-- Email del usuario debajo
-- Sección con el toggle de tema (movido desde AppLayout)
-- Botón "Cerrar sesión" que abre el modal
-
-### Paso 2 — Toggle tema persistido en Supabase (Tarea 8.2)
-- Al cambiar el tema, hacer UPDATE en `perfil_usuario` con `tema_preferido`
-- Al cargar la app, leer `tema_preferido` de `perfil_usuario` y aplicarlo
-- Prioridad: Supabase > localStorage > prefers-color-scheme
-- Mover la lógica de carga inicial a `useTheme.ts`
-
-### Paso 3 — Modal logout (Tarea 8.3)
-- Componente inline en `Cuenta.tsx` (no hace falta fichero separado)
-- Overlay oscuro + card centrada: "¿Cerrar sesión?" + "Cancelar" + "Cerrar sesión"
-- Al confirmar: `signOut()` → redirige a `/login`
-
-### Paso 4 — Limpiar AppLayout
-- Eliminar el toggle de tema de `AppLayout.tsx` (ahora vive en Cuenta)
-
----
-
-## Archivos a crear/modificar
-- `src/pages/Cuenta.tsx` (modificar — implementación completa)
-- `src/hooks/useTheme.ts` (modificar — persistencia en Supabase)
-- `src/components/AppLayout.tsx` (modificar — eliminar toggle)
+- `USE_MOCK_OCR=true` activo — cambiar a `false` cuando RunPod esté validado
+- Variables Vercel a añadir: `RUNPOD_API_KEY`, `RUNPOD_ENDPOINT_ID`
+- Variables Vercel a eliminar: `HF_API_TOKEN`, `HF_MODEL_ID`
+- Consultar Notion antes de iniciar
