@@ -1,5 +1,31 @@
 # Scannet — Aplicación web OCR de tickets
 
+## Leer al inicio de cada sesión
+
+Leer siempre antes de escribir código:
+- `Scannet/memory/bot/activeContext.md` — estado actual y próxima acción
+- `Scannet/memory/bot/progress.md` — fases completadas, bugs, pendientes
+- `Scannet/memory/bot/decisions.md` — decisiones técnicas vigentes (stack, patrones, API)
+- `Scannet/memory/bot/features.md` — funcionalidades implementadas por fase
+
+Si la sesión toca el modelo OCR o el deploy RunPod, leer también:
+- `memory/bot/activeContext.md`
+- `memory/bot/decisions.md`
+- `memory/bot/progress.md`
+
+## Actualizar memoria al completar tareas
+
+| Tarea completada | Archivo a actualizar |
+|------------------|----------------------|
+| Feature implementada | `Scannet/memory/bot/features.md` (con fecha) |
+| Issue resuelto | `Scannet/memory/bot/progress.md` (con fecha) |
+| Estilo o convención acordada | `Scannet/memory/bot/style.md` (regla vigente, sin fecha) |
+| Decisión técnica | `Scannet/memory/bot/decisions.md` (con fecha) |
+| Cambio de foco | Reescribir `Scannet/memory/bot/activeContext.md` |
+| Deploy o cambio que afecta al modelo | Actualizar también `memory/bot/` |
+
+Hacer el commit de los archivos bot/ junto al código en el mismo commit.
+
 ## Descripción
 
 Aplicación web que permite a usuarios subir fotos de tickets españoles,
