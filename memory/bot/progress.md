@@ -27,10 +27,23 @@
 - Issue 5 resuelto: `matplotlib` + `tqdm` añadidos a requirements
 - Imagen publicada: `jtp703/scannet-ocr-worker:latest`
 
-## PENDIENTE (pausa 2026-04-11)
+## 2026-04-11 — Sesión de despliegue RunPod (continuación)
 
-- [ ] RunPod → Edit endpoint → Container Disk → **20 GB** (sin rebuild)
-- [ ] Fix check caché: `config.json` → `model-00001-of-000001.safetensors` → rebuild → push
-- [ ] Fase 4: test con curl (3 tickets reales, criterio 3/3 JSON válido)
-- [ ] Actualizar scan.ts con bloque RunPod (Fase 6 del plan_despliegue_inferencia.md)
+- Container Disk aumentado a 20 GB ✅
+- Fix check caché: `config.json` → `model-00001-of-000001.safetensors` ✅
+- Worker arranca OK y modelo carga (logs confirmados) ✅
+- Endpoint responde peticiones (no crash) ✅
+- Issue 6 identificado: modelo genera `} ` — investigación en curso
+  - merge_and_unload añadido (no resolvió)
+  - tokenizer.add_bos_token=False añadido (no resolvió)
+  - Debug prints añadidos al handler (pendiente rebuild + observar logs)
+- Notion actualizado: DB correcta = `1efe1bf2-d460-4aef-b105-6945807edb7f` (Tareas de Despliegue)
+- Coste acumulado RunPod: ~10.91 USD
+
+## PENDIENTE (pausa 2026-04-11 sesión 2)
+
+- [ ] Rebuild handler.py con debug prints → push → lanzar test → ver logs RunPod
+- [ ] Con logs: identificar causa real de `} ` (sam_model, img_sum, token IDs)
+- [ ] Fix definitivo → rebuild final (sin debug) → test con 3 tickets reales
+- [ ] Fase 6: actualizar scan.ts para llamar a RunPod
 - [ ] Añadir RUNPOD_API_KEY + RUNPOD_ENDPOINT_ID a Vercel env vars

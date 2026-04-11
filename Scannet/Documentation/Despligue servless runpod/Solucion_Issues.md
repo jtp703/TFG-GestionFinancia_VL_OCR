@@ -69,6 +69,7 @@ RUNPOD_ENDPOINT_ID=abc1234xyz   ← este valor va en .env.local y en Vercel
 ```
 
 La URL de llamada desde `scan.ts` será:
+
 ```
 https://api.runpod.ai/v2/abc1234xyz/runsync
 ```
@@ -117,65 +118,102 @@ La imagen `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04` está confi
 
 ## Lecciones aprendidas
 
-| Problema | Causa | Regla a seguir |
-|----------|-------|----------------|
-| Worker crash sin output Python | `torch` reinstalado vía pip sobreescribe CUDA bindings | Nunca incluir `torch` en requirements si la imagen base ya lo tiene |
-| Conflicto `huggingface_hub` | Pin `==0.31.1` incompatible con `transformers==4.56.2` (requiere `>=0.34.0`) | Dejar `huggingface_hub` sin pin; pip resuelve dentro del rango de transformers |
-| `register_pytree_node` AttributeError | `transformers==4.56.2` requiere PyTorch ≥ 2.2.0; imagen base tenía 2.1.0 | Cambiar base image a `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04` |
-| `matplotlib` ImportError | El custom code de `unsloth/DeepSeek-OCR-2` importa matplotlib; no estaba en requirements | Añadir `matplotlib` y `tqdm` a requirements.txt ✅ RESUELTO |
-| Approach de inferencia incorrecto | handler.py usaba `apply_chat_template` — el modelo requiere `DeepSeekOCR2DataCollator` con `images`, `images_seq_mask`, `images_spatial_crop` explícitos | Reescribir handler.py basándose en Pruebas_de_inferencia.ipynb Celda 3 ✅ RESUELTO |
+| Problema                                   | Causa                                                                                                                                                                                                        | Regla a seguir                                                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Worker crash sin output Python             | `torch` reinstalado vía pip sobreescribe CUDA bindings                                                                                                                                                       | Nunca incluir `torch` en requirements si la imagen base ya lo tiene                                                        |
+| Conflicto `huggingface_hub`                | Pin `==0.31.1` incompatible con `transformers==4.56.2` (requiere `>=0.34.0`)                                                                                                                                 | Dejar `huggingface_hub` sin pin; pip resuelve dentro del rango de transformers                                             |
+| `register_pytree_node` AttributeError      | `transformers==4.56.2` requiere PyTorch ≥ 2.2.0; imagen base tenía 2.1.0                                                                                                                                     | Cambiar base image a `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04`                                            |
+| `matplotlib` ImportError                   | El custom code de `unsloth/DeepSeek-OCR-2` importa matplotlib; no estaba en requirements                                                                                                                     | Añadir `matplotlib` y `tqdm` a requirements.txt ✅ RESUELTO                                                                |
+| Approach de inferencia incorrecto          | handler.py usaba `apply_chat_template` — el modelo requiere `DeepSeekOCR2DataCollator` con `images`, `images_seq_mask`, `images_spatial_crop` explícitos                                                     | Reescribir handler.py basándose en Pruebas_de_inferencia.ipynb Celda 3 ✅ RESUELTO                                         |
+| Sin espacio en disco (Problema A)          | Modelo pesa 6.6 GB, disco por defecto ~5.3 GB libre                                                                                                                                                          | Container Disk → 20 GB en RunPod sin rebuild ✅ RESUELTO                                                                   |
+| Check de caché falso positivo (Problema B) | `config.json` presente pero safetensors ausentes tras descarga parcial                                                                                                                                       | Check cambiado a `model-00001-of-000001.safetensors` ✅ RESUELTO                                                           |
+| `torch_dtype` deprecado                    | `AutoModel.from_pretrained` con `torch_dtype=` lanza warning; parámetro correcto es `dtype=`                                                                                                                 | Cambiar a `dtype=torch.bfloat16` en handler.py ✅ RESUELTO                                                                 |
+| Modelo genera `} ` (output vacío)          | `PeftModel` sin mergear produce generación incorrecta en greedy decoding. El notebook usa `FastVisionModel.for_inference()` que hace el merge internamente. Sin merge, el modelo colapsa al primer token `}` | Añadir `model = model.merge_and_unload()` tras `PeftModel.from_pretrained` ✅ FIX APLICADO — pendiente rebuild + verificar |
 
 ---
 
-## PENDIENTE — Próxima sesión (pausa 2026-04-11)
+## PENDIENTE — Sesión 2026-04-11 (continuación)
 
-### Problema A — Sin espacio en disco en el worker
+### Issue 5 — Modelo genera `} ` en lugar de JSON completo ← ACTIVO
 
-**Síntoma:**
-```
-The expected file size is: 6778.57 MB
-The target location only has 5352.08 MB free disk space.
-RuntimeError: No space left on device
-```
+**Síntoma (test con `recibo_almeria_133.jpg`):**
 
-**Causa:** El modelo base `unsloth/DeepSeek-OCR-2` pesa ~6.6 GB. El worker RunPod tiene ~5.3 GB libres por defecto.
-
-**Fix requerido (SIN rebuild):**
-- En RunPod → Edit endpoint → aumentar **Container Disk** a mínimo **20 GB**.
-
----
-
-### Problema B — Check de caché detecta descarga incompleta como completa
-
-**Síntoma:**
-```
-[worker] Modelo base ya en cache.   ← falso positivo
-FileNotFoundError: model-00001-of-000001.safetensors   ← pesos no descargados
+```json
+{
+  "error": "El modelo no devolvió JSON válido",
+  "output": { "raw": "} " },
+  "executionTime": 2076
+}
 ```
 
-**Causa:** El handler comprueba `if not os.path.exists(f"{LOCAL_DIR}/config.json")`. La descarga fallida dejó `config.json` pero no los pesos. El check pasa y el worker intenta cargar un modelo incompleto.
+**Causa identificada:** `PeftModel.from_pretrained` carga el adaptador LoRA sobre el modelo base pero NO integra los pesos en el grafo. `model.generate()` sobre un `PeftModel` sin mergear produce generación inestable en decoding greedy — el modelo colapsa al token `}` como primer output. El notebook funciona porque `FastVisionModel.for_inference(model)` llama internamente a `merge_and_unload()`.
 
-**Fix requerido (rebuild pequeño):** Cambiar el check a:
+**Fix aplicado en handler.py (pendiente rebuild):**
+
 ```python
-if not os.path.exists(f"{LOCAL_DIR}/model-00001-of-000001.safetensors"):
+# Antes (líneas 75-78):
+model = PeftModel.from_pretrained(model, LORA_MODEL_ID, token=HF_TOKEN)
+model.eval()
+
+# Después:
+model = PeftModel.from_pretrained(model, LORA_MODEL_ID, token=HF_TOKEN)
+model = model.merge_and_unload()   # ← integra pesos LoRA en base model
+model.eval()
 ```
+
+También corregido: `torch_dtype=` → `dtype=` (deprecation).
+
+**Estado:** Fix en handler.py local ✅ — merge_and_unload NO resolvió el `} `. Ver Issue 6.
 
 ---
 
-### Estado al pausar
+## Issue 6 — Modelo genera `} ` (en investigación) ← ACTIVO
 
-| Componente | Estado |
-|---|---|
-| Docker image | ✅ `jtp703/scannet-ocr-worker:latest` con handler correcto |
-| matplotlib + tqdm | ✅ Instalados |
-| DeepSeekOCR2DataCollator | ✅ Handler reescrito correctamente |
-| Disco RunPod | ❌ Pendiente aumentar a 20 GB |
-| Check de caché | ❌ Pendiente fix (rebuild pequeño) |
+**Síntoma:** Todas las peticiones retornan `{ "error": "El modelo no devolvió JSON válido", "raw": "} " }` con `executionTime` ~1s.
 
-**Orden de acción al retomar:**
-1. RunPod → Edit endpoint → Container Disk → 20 GB (sin rebuild)
-2. Fix check de caché en handler.py → rebuild → push
-3. Verificar que el worker arranca y descarga el modelo completo
-4. Continuar con Fase 4 — test con curl
+**Hipótesis investigadas:**
 
-10,91$ gastado recuerdalo en el chat revisa actual
+| Hipótesis | Fix aplicado | Resultado |
+|-----------|-------------|-----------|
+| PeftModel sin merge | `merge_and_unload()` | ❌ No resolvió |
+| BOS spurioso por `add_bos_token=True` | `tokenizer.add_bos_token = False` | ❌ No resolvió |
+| `torch_dtype` deprecado | Revertido a `torch_dtype=` | ⚪ No era causa |
+
+**Próxima hipótesis a verificar (debug añadido):**
+
+El modelo custom (`modeling_deepseekocr2.py:420`) solo procesa imágenes si:
+```python
+if sam_model is not None and (input_ids.shape[1] != 1 or self.training) and torch.sum(images[0][1]).item() != 0:
+```
+Si `sam_model` es None o `img_sum ≈ 0`, la imagen se ignora y el modelo genera sin contexto visual → `} `.
+
+**Debug añadido en handler.py (pendiente rebuild):**
+```python
+sam = getattr(model, 'sam_model', None) or getattr(getattr(model, 'model', None), 'sam_model', None)
+img_sum = images[0][1].sum().item()
+print(f"[debug] input_ids shape: {input_ids.shape}, sam_model: {sam is not None}, img_sum: {img_sum:.2f}")
+print(f"[debug] images_seq_mask True count: {images_seq_mask.sum().item()}")
+# ... tras generate:
+print(f"[debug] generated {len(generated_ids)} tokens: {generated_ids.tolist()[:20]}")
+print(f"[debug] raw (no skip): {repr(tokenizer.decode(generated_ids, skip_special_tokens=False))[:200]}")
+```
+
+**Próxima acción:**
+1. `docker build -t jtp703/scannet-ocr-worker:latest . && docker push`
+2. Lanzar test con `recibo_almeria_133.jpg`
+3. Leer logs RunPod → analizar valores de debug
+4. Fix definitivo basado en logs
+
+---
+
+### Estado actual (2026-04-11 — pausa sesión 2)
+
+| Componente                    | Estado |
+| ----------------------------- | ------ |
+| Docker image en Hub           | ⚠️ Necesita rebuild con debug (handler.py modificado localmente) |
+| Container Disk RunPod         | ✅ 20 GB |
+| Worker arranca + modelo carga | ✅ Verificado |
+| Endpoint responde peticiones  | ✅ No crash, retorna error JSON |
+| Output del modelo correcto    | ❌ Genera `} ` — causa pendiente de debug |
+
+**Coste acumulado: ~10.91 USD**

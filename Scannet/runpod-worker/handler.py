@@ -71,9 +71,19 @@ model = AutoModel.from_pretrained(
     device_map="cuda",
 )
 tokenizer = AutoTokenizer.from_pretrained(LOCAL_DIR, trust_remote_code=True)
+# FastVisionModel.for_training/for_inference (Unsloth) hace esto internamente.
+# Sin este flag, tokenizer.encode("") devuelve [0] (BOS) en lugar de [],
+# lo que añade un token espurio al final del input y rompe la generación.
+tokenizer.add_bos_token = False
 
 print("[worker] Aplicando adaptador LoRA (Lacax/deepseek_ocr_lora)...")
 model = PeftModel.from_pretrained(model, LORA_MODEL_ID, token=HF_TOKEN)
+
+# Merge LoRA weights into base model — necesario para que generate() funcione igual
+# que FastVisionModel.for_inference() del notebook (que hace merge internamente).
+# Sin merge, el PeftModel.generate() produce output incorrecto (ej: solo "} ").
+print("[worker] Mergeando pesos LoRA en el modelo base...")
+model = model.merge_and_unload()
 model.eval()
 print(f"[worker] Modelo listo — dtype={model.dtype}, device={next(model.parameters()).device}")
 
@@ -304,6 +314,12 @@ def handler(job: dict) -> dict:
         images_seq_mask     = batch["images_seq_mask"].to(model.device)
         images_spatial_crop = batch["images_spatial_crop"].to(model.device)
 
+        # DEBUG — se eliminará tras diagnosticar
+        sam = getattr(model, 'sam_model', None) or getattr(getattr(model, 'model', None), 'sam_model', None)
+        img_sum = images[0][1].sum().item() if images else 0
+        print(f"[debug] input_ids shape: {input_ids.shape}, sam_model: {sam is not None}, img_sum: {img_sum:.2f}")
+        print(f"[debug] images_seq_mask True count: {images_seq_mask.sum().item()}")
+
         with torch.no_grad():
             outputs = model.generate(
                 input_ids=input_ids,
@@ -315,6 +331,10 @@ def handler(job: dict) -> dict:
                 do_sample=False,
                 repetition_penalty=1.3,
             )
+
+        generated_ids = outputs[0][input_ids.shape[1]:]
+        print(f"[debug] generated {len(generated_ids)} tokens: {generated_ids.tolist()[:20]}")
+        print(f"[debug] raw (no skip): {repr(tokenizer.decode(generated_ids, skip_special_tokens=False))[:200]}")
 
         raw_text = tokenizer.decode(
             outputs[0][input_ids.shape[1]:],
