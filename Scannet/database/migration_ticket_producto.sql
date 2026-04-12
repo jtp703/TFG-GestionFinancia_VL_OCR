@@ -47,7 +47,10 @@ WHERE NOT EXISTS (
   SELECT 1 FROM producto_canonical pc WHERE pc.canonical_id = p.id
 );
 
--- PASO 4: Quitar columnas que ya no pertenecen al catálogo
+-- PASO 4: Eliminar la policy antigua que depende de ticket_id (bloquea el DROP COLUMN)
+DROP POLICY IF EXISTS "producto: solo el propio usuario" ON producto;
+
+-- Quitar columnas que ya no pertenecen al catálogo
 ALTER TABLE producto DROP COLUMN IF EXISTS ticket_id;
 ALTER TABLE producto DROP COLUMN IF EXISTS cantidad;
 ALTER TABLE producto DROP COLUMN IF EXISTS precio_total;
