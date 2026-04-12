@@ -27,70 +27,94 @@
 
 ---
 
-#### Bug A — `useTickets` está en modo mock hardcodeado
+#### Bug A — `useTickets` estaba en modo mock hardcodeado ✅ RESUELTO
 **Archivo:** `src/hooks/useTickets.ts:5`
-**Síntoma:** El donut y la lista de gastos siempre muestran datos falsos, nunca los tickets reales de Supabase.
-**Causa:** `const USE_MOCK = true` está hardcodeado. Nunca llama a `/api/tickets`.
-**Fix:** Cambiar a `false` y verificar que `/api/tickets` devuelve datos reales del usuario autenticado.
-**Prioridad:** 🔴 Alta — sin esto la app no muestra nada real.
+**Fix aplicado:** `USE_MOCK = false` + try/catch en `getSession()`. El donut consulta Supabase real.
 
 ---
 
-#### Bug B — Bucket `tickets` no existe en Supabase Storage
-**Síntoma:** `{"statusCode":"404","error":"Bucket not found"}` al guardar un ticket.
-**Causa:** El bucket `tickets` nunca fue creado manualmente en el dashboard de Supabase.
-**Fix (manual, sin código):**
-1. Supabase Dashboard → Storage → New Bucket
-2. Nombre: `tickets`
-3. Tipo: **Private** (las imágenes no deben ser públicas)
-4. Guardar
-**Prioridad:** 🔴 Alta — sin el bucket, `subirImagen()` siempre falla.
+#### Bug B — Bucket `tickets` creado ✅ / RLS policy añadida ✅
+**Estado:** Bucket Private creado + política INSERT para usuarios autenticados aplicada.
+**Pendiente verificar:** que `subirImagen()` ya no devuelve 400 en el próximo scan real.
 
 ---
 
-#### Bug C — Upload de imagen devuelve 400
+#### Bug C — Upload de imagen sigue fallando (pendiente de verificar)
 **Archivo:** `src/hooks/useScan.ts` → función `subirImagen()`
-**Síntoma:** `POST .../storage/v1/object/tickets/.../timestamp.jpg 400 (Bad Request)`
-**Causa probable:** El bucket no existe (Bug B) y/o la RLS policy de Storage no permite inserts autenticados.
-**Fix:**
-1. Primero resolver Bug B (crear el bucket).
-2. En Supabase Dashboard → Storage → Policies → añadir política INSERT para usuarios autenticados:
-   ```sql
-   (bucket_id = 'tickets') AND (auth.uid()::text = (storage.foldername(name))[1])
-   ```
-**Prioridad:** 🟡 Media — el ticket se guarda igualmente sin imagen (degradación suave), pero la imagen_url queda vacía.
+**Síntoma:** El bucket y la RLS policy ya existen, pero el upload puede seguir fallando.
+**Causa probable:** La función usa `getPublicUrl` sobre un bucket **Private** — las URLs públicas no funcionan en buckets privados.
+**Fix necesario:**
+- Cambiar `getPublicUrl` por `createSignedUrl` para generar URLs temporales firmadas, o
+- Guardar solo el `path` en `imagen_url` y generar la signed URL al mostrarla.
+**Prioridad:** 🟡 Media — el ticket se guarda igualmente sin imagen (degradación suave).
 
 ---
 
-#### Bug D — Ticket guardado pero no aparece en el donut
-**Causa:** Bug A (mock activo). Aunque el ticket se guarde correctamente en Supabase, `useTickets` nunca lo consulta.
-**Fix:** Resolverlo al corregir Bug A.
-**Prioridad:** 🔴 Alta (dependiente de Bug A).
+#### Bug D — Pantalla principal de gastos no muestra datos
+**Síntoma:** La sección de gastos aparece vacía aunque haya tickets guardados en Supabase.
+**Causas posibles:**
+1. Bug A ya resuelto — si había tickets previos, deberían aparecer ahora tras el deploy.
+2. No hay tickets en Supabase del mes en curso para ese usuario.
+3. `/api/tickets` devuelve error silencioso — verificar en Network tab del navegador.
+**Fix:** Desplegar el cambio `USE_MOCK = false` y comprobar respuesta de `/api/tickets`. Si devuelve array vacío, el problema es que no hay tickets guardados aún.
+**Prioridad:** 🔴 Alta — bloquea la funcionalidad principal.
 
 ---
 
-#### Bug E — Los productos se guardan pero el ticket puede no guardarse
-**Síntoma:** Los productos aparecen en Supabase pero el ticket no se ve reflejado.
-**Causa probable:** El insert del ticket falla silenciosamente o devuelve error que no se propaga bien. Puede estar relacionado con el campo `total` que no existe en el schema de la tabla `ticket`.
-**Fix:** Revisar el schema de `ticket` en Supabase — si no tiene columna `total`, añadirla o calcularla desde productos. Verificar en Supabase Dashboard → Table Editor → tabla `ticket`.
-**Prioridad:** 🔴 Alta.
+#### Bug E — Gastos predefinidos del perfil no se usan
+**Síntoma:** El usuario introduce un gasto estimado mensual en su perfil pero no se refleja en ningún sitio de la app (sin comparativa, sin barra de progreso, sin alerta).
+**Causa:** La funcionalidad nunca fue implementada — el campo se guarda en BD pero el frontend no lo consume.
+**Fix necesario:**
+- Leer `gasto_estimado` del perfil del usuario en la pantalla de gastos.
+- Mostrar comparativa: gasto real del mes vs. gasto estimado (barra de progreso o indicador visual).
+**Prioridad:** 🔴 Alta — es una funcionalidad core prometida al usuario.
 
 ---
 
-### Mejora F — Modelo OCR
-**Estado actual:** OCR.space (extracción de texto) + DeepSeek-chat (parseo a JSON).
-**Problema:** OCR.space no es óptimo para tickets con layout complejo, letra pequeña o baja calidad.
-**Opciones evaluadas:**
+#### Bug F — Productos duplicados al guardar tickets
+**Síntoma:** Cada vez que se guarda un ticket, sus productos se insertan como registros nuevos aunque ya existan con el mismo nombre y precio.
+**Causa:** `useScan.ts` hace un `INSERT` directo en `producto` sin comprobar si ya existe un producto con la misma descripción y precio.
+**Fix necesario — lógica de deduplicación:**
+1. Antes de insertar un producto, buscar en la tabla `producto` si existe uno con `descripcion = X AND precio_unitario = Y` (independientemente del ticket).
+2. Si existe → asociarlo al ticket actual mediante una tabla intermedia `ticket_producto`.
+3. Si no existe → crearlo en `producto` y luego asociarlo.
+**Cambio de schema requerido:**
+- Crear tabla `ticket_producto` (relación N:M entre `ticket` y `producto`):
+  ```sql
+  CREATE TABLE ticket_producto (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id   uuid NOT NULL REFERENCES ticket(id) ON DELETE CASCADE,
+    producto_id uuid NOT NULL REFERENCES producto(id) ON DELETE CASCADE,
+    cantidad    numeric NOT NULL DEFAULT 1,
+    UNIQUE (ticket_id, producto_id)
+  );
+  ```
+- La tabla `producto` pasa a ser un catálogo compartido: `(descripcion, precio_unitario)` deben ser únicos.
+  ```sql
+  ALTER TABLE producto ADD CONSTRAINT producto_descripcion_precio_unique UNIQUE (descripcion, precio_unitario);
+  ```
+**Criterio de igualdad:** `descripcion` igual (case-insensitive) + `precio_unitario` igual.
+**Prioridad:** 🔴 Alta — sin esto los datos en BD crecen sin control y las estadísticas son incorrectas.
 
-| Opción | Calidad | Coste por ticket | Disponibilidad |
-|--------|---------|------------------|----------------|
-| OCR.space + DeepSeek | ⭐⭐ | ~$0.001 | Free tier limitado |
-| **OpenAI GPT-4o mini** | ⭐⭐⭐⭐ | ~$0.01 | Requiere key OpenAI |
-| **Claude 3 Haiku** | ⭐⭐⭐⭐ | ~$0.008 | Requiere key Anthropic |
-| Gemini 2.0 Flash (con billing) | ⭐⭐⭐⭐ | ~$0.005 | Activar billing Google |
+---
 
-**Recomendación:** GPT-4o mini o Gemini con billing activado. Ambos hacen OCR + parseo en un solo paso (sin OCR.space).
-**Decisión:** Pendiente de confirmar con el usuario qué API key tiene disponible.
+#### Bug G — Storage: URL pública en bucket privado
+**Archivo:** `src/hooks/useScan.ts:134`
+**Síntoma:** `getPublicUrl` sobre bucket privado devuelve una URL inaccesible.
+**Fix:** Usar `createSignedUrl(path, 3600)` en lugar de `getPublicUrl`, o guardar solo el path y firmar al mostrar.
+**Prioridad:** 🟡 Media.
+
+---
+
+### Decisión de modelo OCR — vigente hasta que el flujo esté estable
+
+**Modelo actual:** OCR.space (free tier) + DeepSeek-chat (de pago, crédito disponible).
+**Decisión:** Mantener este modelo gratuito/barato hasta que todo el flujo de principio a fin funcione correctamente (escanear → verificar → guardar → ver en donut → deduplicar productos).
+
+**Hoja de ruta de mejora del modelo (en orden):**
+1. ✅ **Ahora:** OCR.space + DeepSeek-chat — funcional, gratuito/barato.
+2. **Siguiente (cuando el flujo esté estable):** Migrar a un LLM con visión mejor entrenado para tickets (GPT-4o mini, Gemini con billing, o Claude Haiku) — un solo paso sin OCR.space.
+3. **Final (si es posible):** Modelo propio fine-tuned (DeepSeek-VL con LoRA) desplegado en RunPod o similar.
 
 ---
 
@@ -98,19 +122,24 @@
 
 | # | Tarea | Depende de | Estado |
 |---|-------|------------|--------|
-| 9.1 | Crear bucket `tickets` privado en Supabase Storage (manual) | — | ⏳ |
-| 9.2 | Añadir RLS policy INSERT en Storage para usuarios autenticados | 9.1 | ⏳ |
-| 9.3 | Verificar schema tabla `ticket` — confirmar columna `total` existe | — | ⏳ |
-| 9.4 | Cambiar `USE_MOCK = false` en `useTickets.ts` | 9.3 | ✅ |
-| 9.5 | Verificar que `/api/tickets` devuelve datos reales del usuario | 9.4 | ⏳ |
-| 9.6 | Test end-to-end: escanear → verificar → guardar → ver en donut | 9.1–9.5 | ⏳ |
-| 9.7 | Evaluar y migrar modelo OCR si calidad es insuficiente | 9.6 | ⏳ |
+| 9.1 | Crear bucket `tickets` privado en Supabase Storage (manual) | — | ✅ |
+| 9.2 | Añadir RLS policy INSERT en Storage para usuarios autenticados | 9.1 | ✅ |
+| 9.3 | Schema `ticket_producto` — crear tabla intermedia + constraint único en `producto` | — | ⏳ |
+| 9.4 | Cambiar `USE_MOCK = false` en `useTickets.ts` | — | ✅ |
+| 9.5 | Refactorizar insert de productos en `useScan.ts` — deduplicar por nombre+precio | 9.3 | ⏳ |
+| 9.6 | Implementar comparativa gasto estimado vs. real en pantalla de gastos | — | ⏳ |
+| 9.7 | Fix `subirImagen`: cambiar `getPublicUrl` por `createSignedUrl` | — | ⏳ |
+| 9.8 | Verificar que `/api/tickets` devuelve datos reales tras deploy | 9.4 | ⏳ |
+| 9.9 | Test end-to-end: escanear → verificar → guardar → ver en donut | 9.1–9.8 | ⏳ |
+| 9.10 | Evaluar calidad OCR y migrar modelo cuando el flujo esté estable | 9.9 | ⏳ |
 
 ---
 
 ### Notas técnicas
 
-- `USE_MOCK_OCR` en Vercel env vars está en `false` ✅ — el scan llama a la API real.
-- `USE_MOCK` en `useTickets.ts` está en `true` ❌ — hay que cambiarlo a `false`.
-- El campo `total` del ticket se calcula en el frontend como suma de `items`, pero la BD necesita tenerlo o calcularse en la query de `/api/tickets`.
-- Vercel Production Branch: configurar `Feature-App-Stack` como rama de producción en el dashboard.
+- `USE_MOCK_OCR` en Vercel env vars → `false` ✅ — el scan llama a la API real.
+- `USE_MOCK` en `useTickets.ts` → `false` ✅ — el donut consulta Supabase.
+- El campo `total` del ticket se calcula en `/api/tickets` sumando productos — no necesita columna en BD.
+- Bucket `tickets` creado como Private + RLS policy INSERT activa ✅.
+- Rama de producción Vercel: `Feature-App-Stack` ✅.
+- El modelo OCR se mantiene gratuito (OCR.space + DeepSeek) hasta que el flujo completo esté validado.
