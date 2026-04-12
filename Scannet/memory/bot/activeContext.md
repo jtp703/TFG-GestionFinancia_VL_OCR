@@ -1,26 +1,35 @@
 ---
-Última actualización: 2026-04-11
+Última actualización: 2026-04-12
 ---
 
 ## Estado actual de Scannet
 
 - Fases 1–8.1 completadas al 100%
-- OCR: `USE_MOCK_OCR=true` activo — modelo real pendiente de deploy RunPod
-- Deploy: pendiente (Fase 9 — QA y Deploy, 4 tareas en Notion)
+- OCR: pipeline OCR.space + DeepSeek chat activo en producción (RunPod descartado)
+- Deploy: Vercel apunta a rama `Feature-App-Stack` como producción ✅
+- Fase 9 — QA y Deploy: **en curso**
+
+## Completado hoy (2026-04-12)
+
+- `USE_MOCK = false` en `useTickets.ts` — donut ahora consulta Supabase real ✅
+- try/catch en `getSession()` de `useTickets.ts` — evita hook colgado con token inválido ✅
 
 ## Bloqueado ahora mismo
 
-- Bucket `tickets` en Supabase Storage: **pendiente crear** (Dashboard → Storage → New bucket → Private)
-- Worker RunPod: 2 fixes pendientes antes de poder probar con modelo real
-  (ver `memory/bot/activeContext.md` para detalle del modelo)
+- **Bucket `tickets` en Supabase Storage**: pendiente crear **manualmente**
+  Dashboard → Storage → New bucket → nombre: `tickets` → Private
+- **RLS policy INSERT Storage**: añadir tras crear el bucket
+  ```sql
+  (bucket_id = 'tickets') AND (auth.uid()::text = (storage.foldername(name))[1])
+  ```
 
 ## Próximos pasos
 
-1. Cuando RunPod esté operativo: probar flujo completo con `vercel dev` + imagen real
-2. Verificar que ticket aparece en Supabase con `verificado = true` e `imagen_url` relleno
-3. Actualizar `plan.md` antes de iniciar Fase 9
-4. Fase 9: QA y Deploy (consultar Notion antes de empezar)
+1. Usuario crea bucket + RLS policy en Supabase (manual, tareas 9.1 y 9.2)
+2. Verificar que `/api/tickets` devuelve datos reales tras desplegar (tarea 9.5)
+3. Test e2e: escanear → verificar → guardar → ver en donut (tarea 9.6)
+4. Evaluar calidad OCR.space (tarea 9.7)
 
 ## Rama activa
 
-`Feature-App-Stack` → merge pendiente a `Feature-App` tras Memory Bank. Nunca a `main`.
+`Feature-App-Stack` → producción en Vercel. Nunca a `main`.

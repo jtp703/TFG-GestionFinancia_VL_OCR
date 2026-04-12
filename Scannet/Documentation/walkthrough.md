@@ -364,3 +364,26 @@ vercel dev   # Puerto 3000
 > **Siguiente paso: probar el flujo completo con `vercel dev`** — subir una imagen real de ticket y verificar que el modelo OCR devuelve JSON válido.
 > **Siguiente fase tras validar el OCR: Fase 9 — QA y Deploy**.
 > Antes de empezar Fase 9: actualizar `plan.md`.
+
+---
+
+## Fase 9 — QA y Deploy (en curso)
+
+### Sesión 2026-04-12 — Tarea 9.4: USE_MOCK desactivado
+
+**Qué se hizo:**
+- Cambiado `const USE_MOCK = true` → `false` en `src/hooks/useTickets.ts:5`
+- El donut y la lista de gastos ahora consultan `/api/tickets` con el usuario autenticado real (Supabase)
+- Añadido try/catch en `getSession()` dentro del hook para evitar estado colgado si el token es inválido
+
+**Decisión:** El endpoint `/api/tickets` calcula el `total` de cada ticket sumando sus productos — no se necesita columna `total` en la tabla `ticket`. Bug E no requiere cambio de schema.
+
+**Cómo probar:**
+1. Desplegar en Vercel (push a `Feature-App-Stack`)
+2. Iniciar sesión en la app
+3. Si hay tickets guardados en Supabase del mes en curso → deben aparecer en el donut
+4. Si el donut aparece vacío pero hay tickets en Supabase → revisar la respuesta de `/api/tickets` en Network
+
+**Pendiente (manual en Supabase Dashboard):**
+- Tarea 9.1: Crear bucket `tickets` → Storage → New bucket → nombre `tickets` → Private
+- Tarea 9.2: Añadir RLS policy INSERT: `(bucket_id = 'tickets') AND (auth.uid()::text = (storage.foldername(name))[1])`

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
 // ─── Mock data — poner a false cuando el API esté listo ───────────────────────
-const USE_MOCK = true
+const USE_MOCK = false
 
 const MOCK_TICKETS: Ticket[] = [
   { id: '1', comercio: 'Mercadona', fecha: '2026-03-01', metodo_pago: 'tarjeta', verificado: true, total: 67.30, categoria: { id: 'cat-1', nombre: 'Alimentación' }, productos: [] },
@@ -81,7 +81,13 @@ export function useTickets(): UseTicketsResult {
       return
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
+    let session: any = null
+    try {
+      const { data } = await supabase.auth.getSession()
+      session = data.session
+    } catch {
+      // getSession puede lanzar si el refresh token es inválido
+    }
     if (!session) {
       setError('No autenticado')
       setLoading(false)
