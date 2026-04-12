@@ -22,7 +22,12 @@ const MOCK_RESULT = {
   ],
 }
 
-/** POST /api/scan — recibe imagen en base64, llama a HuggingFace Inference API, devuelve JSON del ticket */
+const PROMPT =
+  'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n' +
+  '{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\n' +
+  'NO other text. ONLY valid JSON.'
+
+/** POST /api/scan — recibe imagen en base64, llama a DeepSeek VL2, devuelve JSON del ticket */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -50,48 +55,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mimeType: string = mime ?? (dataUrl.match(/data:([^;]+)/)?.[1] ?? 'image/jpeg')
   const metodoPago: string = metodo_pago ?? 'efectivo'
 
-  // Llamar a Gemini 1.5 Flash — visión + extracción de JSON
-  const geminiKey = process.env.GEMINI_API_KEY
-  if (!geminiKey) return res.status(500).json({ error: 'GEMINI_API_KEY no configurado' })
-
-  const PROMPT =
-    'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n' +
-    '{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\n' +
-    'NO other text. ONLY valid JSON.'
+  // Llamar a DeepSeek VL2 — visión + extracción de JSON
+  const deepseekKey = process.env.DEEPSEEK_API_KEY
+  if (!deepseekKey) return res.status(500).json({ error: 'DEEPSEEK_API_KEY no configurado' })
 
   let ocrResult: any
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mimeType, data: base64Image } },
-              { text: PROMPT },
-            ],
-          }],
-          generationConfig: { temperature: 0, maxOutputTokens: 1024 },
-        }),
-      }
-    )
+    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${deepseekKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-vl2',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+            { type: 'text', text: PROMPT },
+          ],
+        }],
+        max_tokens: 1024,
+        temperature: 0,
+      }),
+    })
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      return res.status(502).json({ error: `Error Gemini: ${errText}` })
+    if (!dsRes.ok) {
+      const errText = await dsRes.text()
+      return res.status(502).json({ error: `Error DeepSeek: ${errText}` })
     }
 
-    const raw = await geminiRes.json()
-    const text: string = raw?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    const raw = await dsRes.json()
+    const text: string = raw?.choices?.[0]?.message?.content ?? ''
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return res.status(422).json({ error: 'Gemini no devolvió JSON válido', raw: text })
+    if (!jsonMatch) return res.status(422).json({ error: 'DeepSeek no devolvió JSON válido', raw: text })
 
     ocrResult = JSON.parse(jsonMatch[0])
   } catch (err: any) {
-    return res.status(502).json({ error: `Fallo al llamar a Gemini: ${err.message}` })
+    return res.status(502).json({ error: `Fallo al llamar a DeepSeek: ${err.message}` })
   }
 
   return res.status(200).json({
