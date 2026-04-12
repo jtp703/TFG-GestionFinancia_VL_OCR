@@ -23,17 +23,17 @@ const MOCK_RESULT = {
 }
 
 const PROMPT =
-  'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n' +
+  'Aquí está el texto extraído de un ticket español. Extrae la información y devuélvela ESTRICTAMENTE como un objeto JSON válido con esta estructura:\n\n' +
   '{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\n' +
-  'NO other text. ONLY valid JSON.'
+  'SOLO el JSON. Sin texto adicional ni explicaciones.'
 
-/** POST /api/scan — recibe imagen en base64, llama a DeepSeek VL2, devuelve JSON del ticket */
+/** POST /api/scan — paso 1: OCR.space extrae texto, paso 2: DeepSeek parsea a JSON */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Modo mock — responde inmediatamente sin autenticar ni llamar al modelo
+  // Modo mock — responde inmediatamente sin llamar a ninguna API
   if (process.env.USE_MOCK_OCR === 'true') {
     const metodo_pago = req.body?.metodo_pago ?? 'efectivo'
     return res.status(200).json({ ...MOCK_RESULT, metodo_pago })
@@ -49,13 +49,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { image, metodo_pago, mimeType: mime } = req.body ?? {}
   if (!image) return res.status(400).json({ error: 'No se recibió imagen' })
 
-  // La imagen llega como data URL o base64 puro
   const dataUrl: string = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`
   const base64Image = dataUrl.split(',')[1]
   const mimeType: string = mime ?? (dataUrl.match(/data:([^;]+)/)?.[1] ?? 'image/jpeg')
   const metodoPago: string = metodo_pago ?? 'efectivo'
 
-  // Llamar a DeepSeek VL2 — visión + extracción de JSON
+  // ── Paso 1: OCR.space — extrae texto del ticket ───────────────────────────
+  const ocrKey = process.env.OCR_SPACE_API_KEY ?? 'helloworld'
+
+  let rawText = ''
+  try {
+    const ocrRes = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        apikey:             ocrKey,
+        base64Image:        `data:${mimeType};base64,${base64Image}`,
+        language:           'spa',
+        isOverlayRequired:  'false',
+        OCREngine:          '2',
+      }).toString(),
+    })
+
+    if (!ocrRes.ok) {
+      const err = await ocrRes.text()
+      return res.status(502).json({ error: `Error OCR.space: ${err}` })
+    }
+
+    const ocrData = await ocrRes.json()
+
+    if (ocrData.IsErroredOnProcessing) {
+      return res.status(502).json({ error: `OCR.space: ${ocrData.ErrorMessage?.[0] ?? 'error desconocido'}` })
+    }
+
+    rawText = ocrData?.ParsedResults?.[0]?.ParsedText ?? ''
+  } catch (err: any) {
+    return res.status(502).json({ error: `Fallo en OCR: ${err.message}` })
+  }
+
+  if (!rawText.trim()) {
+    return res.status(422).json({ error: 'No se pudo extraer texto del ticket' })
+  }
+
+  // ── Paso 2: DeepSeek — parsea el texto a JSON estructurado ────────────────
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   if (!deepseekKey) return res.status(500).json({ error: 'DEEPSEEK_API_KEY no configurado' })
 
@@ -64,26 +100,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${deepseekKey}`,
+        Authorization:  `Bearer ${deepseekKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'deepseek-vl2',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
-            { type: 'text', text: PROMPT },
-          ],
-        }],
-        max_tokens: 1024,
+        model:       'deepseek-chat',
+        messages:    [{ role: 'user', content: `${PROMPT}\n\nTexto del ticket:\n${rawText}` }],
+        max_tokens:  1024,
         temperature: 0,
       }),
     })
 
     if (!dsRes.ok) {
-      const errText = await dsRes.text()
-      return res.status(502).json({ error: `Error DeepSeek: ${errText}` })
+      const err = await dsRes.text()
+      return res.status(502).json({ error: `Error DeepSeek: ${err}` })
     }
 
     const raw = await dsRes.json()
@@ -94,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     ocrResult = JSON.parse(jsonMatch[0])
   } catch (err: any) {
-    return res.status(502).json({ error: `Fallo al llamar a DeepSeek: ${err.message}` })
+    return res.status(502).json({ error: `Fallo en DeepSeek: ${err.message}` })
   }
 
   return res.status(200).json({
