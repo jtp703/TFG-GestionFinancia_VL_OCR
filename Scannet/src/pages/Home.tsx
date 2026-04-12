@@ -68,6 +68,26 @@ export function Home() {
         <PresupuestoBar totalMes={totalMes} estimado={gastoEstimado} />
       )}
 
+      {/* Datos del perfil financiero — ahorro deseado y gastos fijos */}
+      {!loading && (perfil?.ahorro_deseado || perfil?.gastos_fijos) && (
+        <div className="mx-4 mb-4 rounded-2xl px-4 py-3 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          {perfil?.ahorro_deseado && perfil.ahorro_deseado > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color: 'var(--text-muted)' }}>Ahorro objetivo</span>
+              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {perfil.ahorro_deseado.toFixed(2)} €/mes
+              </span>
+            </div>
+          )}
+          {perfil?.gastos_fijos && (
+            <div className="text-xs space-y-0.5">
+              <p style={{ color: 'var(--text-muted)' }}>Gastos fijos</p>
+              <p style={{ color: 'var(--text-primary)' }}>{perfil.gastos_fijos}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Estado de carga */}
       {loading && (
         <div className="flex justify-center py-16">
@@ -86,7 +106,7 @@ export function Home() {
       {/* Con datos */}
       {!loading && !error && tickets.length > 0 && (
         <>
-          <DonutChart totalesPorCategoria={totalesPorCategoria} totalMes={totalMes} />
+          <DonutChart totalesPorCategoria={totalesPorCategoria} totalMes={totalMes} onSelectCategoria={setCatSeleccionada} />
           <div className="mt-4">
             <CategoriaList
               totalesPorCategoria={totalesPorCategoria}

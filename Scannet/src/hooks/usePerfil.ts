@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient'
 interface Perfil {
   gasto_mensual_estimado: number | null
   ahorro_deseado:         number | null
+  gastos_fijos:           string | null
 }
 
 interface UsePerfilResult {
@@ -23,7 +24,7 @@ export function usePerfil(): UsePerfilResult {
 
       const { data } = await supabase
         .from('perfil_usuario')
-        .select('gasto_mensual_estimado, ahorro_deseado')
+        .select('gasto_mensual_estimado, ahorro_deseado, gastos_fijos')
         .eq('id', session.user.id)
         .single()
 

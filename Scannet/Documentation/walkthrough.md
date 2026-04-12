@@ -463,3 +463,29 @@ Rediseño del modelo de datos de productos para evitar duplicados en el catálog
 **Por qué:** El usuario necesita poder cambiar la fecha del ticket para que caiga en el mes en curso y aparezca en el donut. El selector de calendario del sistema es la forma más segura.
 
 **Archivo modificado:** `src/components/VerifyForm.tsx`
+
+---
+
+### Sesión 2026-04-12 — Mejoras UI: donut clickable, drill-down con productos, perfil financiero
+
+**Qué se hizo:**
+
+**DonutChart:**
+- Los segmentos del donut ahora son clickables y abren el panel de la categoría correspondiente.
+- Eliminado el cuadrado negro de focus: `activeIndex={-1}` + `outline: none` en el chart y los segmentos.
+- Nuevo prop `onSelectCategoria` (opcional) — si no se pasa, el donut es solo visual.
+
+**DrillDown:**
+- Cada ticket es ahora expandible — al pulsar muestra sus productos.
+- Botón "Precio ↑/↓" para ordenar los productos por precio_total ascendente o descendente.
+- Estado de expansión independiente por ticket (uno abierto a la vez).
+
+**Perfil financiero en Home:**
+- `usePerfil` ahora también carga `gastos_fijos`.
+- Se muestra una tarjeta con el ahorro objetivo (€/mes) y los gastos fijos (texto libre del onboarding) cuando el usuario los haya rellenado.
+
+**Archivos modificados:**
+- `src/components/DonutChart.tsx`
+- `src/components/DrillDown.tsx`
+- `src/hooks/usePerfil.ts`
+- `src/pages/Home.tsx`

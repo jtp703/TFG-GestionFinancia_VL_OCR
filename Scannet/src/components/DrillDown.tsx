@@ -1,21 +1,36 @@
+import { useState } from 'react'
 import type { Ticket, TotalCategoria } from '@/hooks/useTickets'
 
 interface Props {
-  catId: string | null
+  catId:     string | null
   categoria: TotalCategoria | null
-  tickets: Ticket[]
-  onClose: () => void
+  tickets:   Ticket[]
+  onClose:   () => void
 }
 
-/** Panel de detalle por categoría. Móvil: pantalla completa. Desktop: slide desde la derecha 200ms, 360px ancho. */
+/** Panel de detalle por categoría con tickets expandibles y productos ordenables. */
 export function DrillDown({ catId, categoria, tickets, onClose }: Props) {
   const visible = catId !== null
+  const [expandedId, setExpandedId]   = useState<string | null>(null)
+  const [sortDir, setSortDir]         = useState<'desc' | 'asc'>('desc')
 
   const ticketsFiltrados = tickets.filter(t =>
     catId === 'sin-categoria'
       ? t.categoria === null
       : t.categoria?.id === catId
   )
+
+  function toggleTicket(id: string) {
+    setExpandedId(prev => prev === id ? null : id)
+  }
+
+  function sortedProductos(t: Ticket) {
+    return [...t.productos].sort((a, b) =>
+      sortDir === 'desc'
+        ? b.precio_total - a.precio_total
+        : a.precio_total - b.precio_total
+    )
+  }
 
   return (
     <>
@@ -70,25 +85,93 @@ export function DrillDown({ catId, categoria, tickets, onClose }: Props) {
               Sin tickets en esta categoría
             </li>
           )}
-          {ticketsFiltrados.map(t => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 px-4 py-3"
-              style={{ borderBottom: '1px solid var(--border)' }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                  {t.comercio ?? 'Sin comercio'}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {t.fecha ?? '—'}
-                </p>
-              </div>
-              <span className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>
-                {t.total.toFixed(2)} €
-              </span>
-            </li>
-          ))}
+
+          {ticketsFiltrados.map(t => {
+            const isOpen = expandedId === t.id
+            const productos = sortedProductos(t)
+
+            return (
+              <li key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                {/* Cabecera del ticket — pulsar para expandir */}
+                <button
+                  onClick={() => toggleTicket(t.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {t.comercio ?? 'Sin comercio'}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {t.fecha ?? '—'}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>
+                    {t.total.toFixed(2)} €
+                  </span>
+                  {/* Chevron */}
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{
+                      color: 'var(--text-muted)',
+                      flexShrink: 0,
+                      transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 150ms',
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {/* Productos expandidos */}
+                {isOpen && (
+                  <div style={{ background: 'var(--bg)', borderTop: '1px solid var(--border)' }}>
+                    {/* Botón ordenar */}
+                    <div className="flex justify-end px-4 py-2">
+                      <button
+                        onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+                        className="flex items-center gap-1 text-xs"
+                        style={{ color: 'var(--color-brand)' }}
+                      >
+                        Precio
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          {sortDir === 'desc'
+                            ? <polyline points="6 9 12 15 18 9" />
+                            : <polyline points="18 15 12 9 6 15" />
+                          }
+                        </svg>
+                      </button>
+                    </div>
+
+                    {productos.length === 0 ? (
+                      <p className="px-4 pb-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Sin productos registrados
+                      </p>
+                    ) : (
+                      <ul className="pb-2">
+                        {productos.map(p => (
+                          <li
+                            key={p.id}
+                            className="flex items-center gap-2 px-4 py-1.5"
+                          >
+                            <span className="flex-1 text-xs truncate" style={{ color: 'var(--text-primary)' }}>
+                              {p.descripcion}
+                            </span>
+                            <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                              {p.cantidad}×
+                            </span>
+                            <span className="text-xs font-medium flex-shrink-0 w-16 text-right" style={{ color: 'var(--text-primary)' }}>
+                              {p.precio_total.toFixed(2)} €
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       </div>
     </>
