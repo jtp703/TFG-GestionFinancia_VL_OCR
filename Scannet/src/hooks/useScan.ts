@@ -139,13 +139,15 @@ export function useScan(): UseScanReturn {
     }
   }
 
-  /** Convierte fecha DD/MM/YYYY → YYYY-MM-DD para Supabase */
+  /** Convierte fecha a YYYY-MM-DD para Supabase.
+   *  Acepta: DD/MM/YYYY, DD/MM/YYYY HH:mm:ss, YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss */
   function toISODate(fecha: string): string {
-    const parts = fecha.split('/')
+    const dateOnly = fecha.split('T')[0].split(' ')[0].trim()
+    const parts = dateOnly.split('/')
     if (parts.length === 3 && parts[0].length === 2) {
       return `${parts[2]}-${parts[1]}-${parts[0]}`
     }
-    return fecha // ya está en formato ISO o desconocido
+    return dateOnly
   }
 
   /** Guarda el ticket verificado en Supabase */

@@ -11,7 +11,15 @@ interface Props {
 /** Tabla de verificación editable post-OCR */
 export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar }: Props) {
   const [comercio, setComercio]   = useState(inicial.comercio)
-  const [fecha, setFecha]         = useState(inicial.fecha)
+  // Normaliza fecha a YYYY-MM-DD para el input type="date"
+  // Acepta: DD/MM/YYYY, DD/MM/YYYY HH:mm:ss, YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss
+  function toInputDate(f: string): string {
+    const dateOnly = f.split('T')[0].split(' ')[0].trim()
+    const parts = dateOnly.split('/')
+    if (parts.length === 3 && parts[0].length === 2) return `${parts[2]}-${parts[1]}-${parts[0]}`
+    return dateOnly
+  }
+  const [fecha, setFecha] = useState(toInputDate(inicial.fecha))
   const [metodo, setMetodo]       = useState<MetodoPago>(inicial.metodo_pago)
   const [items, setItems]         = useState<ProductoOCR[]>(inicial.items)
 
@@ -64,7 +72,7 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
         </div>
         <div>
           <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Fecha</label>
-          <input style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} />
+          <input type="date" style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} />
         </div>
       </div>
 

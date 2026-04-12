@@ -450,3 +450,16 @@ Rediseño del modelo de datos de productos para evitar duplicados en el catálog
 **Por qué:** El bucket `tickets` es privado (datos personales). Las URLs públicas no funcionan. Para mostrar la imagen en el futuro se debe llamar a `supabase.storage.from('tickets').createSignedUrl(path, 3600)` en el componente que la muestre.
 
 **Archivo modificado:** `src/hooks/useScan.ts` → función `subirImagen()`
+
+---
+
+### Sesión 2026-04-12 — Fix VerifyForm: fecha con selector de calendario
+
+**Qué se hizo:**
+- El campo fecha en `VerifyForm` era un input de texto libre — difícil de editar y propenso a errores de formato.
+- Cambiado a `<input type="date">` con normalización automática de `DD/MM/YYYY` → `YYYY-MM-DD` al montar.
+- `useScan.ts → toISODate()` ya manejaba el paso a ISO — sin cambios necesarios allí.
+
+**Por qué:** El usuario necesita poder cambiar la fecha del ticket para que caiga en el mes en curso y aparezca en el donut. El selector de calendario del sistema es la forma más segura.
+
+**Archivo modificado:** `src/components/VerifyForm.tsx`
