@@ -10,7 +10,7 @@ export function AppLayout() {
       <Sidebar />
 
       {/* Contenido principal */}
-      <main className="flex-1 md:ml-16 pb-14 md:pb-0">
+      <main className="flex-1 md:ml-16 md:pb-0" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 8px))' }}>
         <Outlet />
       </main>
 

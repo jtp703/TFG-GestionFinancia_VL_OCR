@@ -37,11 +37,11 @@ const NAV_ITEMS = [
 export function BottomNav() {
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around"
       style={{
-        height: '56px',
         backgroundColor: 'var(--surface)',
         borderTop: '1px solid var(--border)',
+        paddingBottom: 'env(safe-area-inset-bottom, 8px)',
       }}
     >
       {NAV_ITEMS.map(({ to, label, icon }) => (
@@ -49,7 +49,7 @@ export function BottomNav() {
           key={to}
           to={to}
           end={to === '/'}
-          className="flex flex-col items-center justify-center gap-0.5 flex-1 h-full"
+          className="flex flex-col items-center justify-center gap-0.5 flex-1 py-3"
           style={({ isActive }) => ({
             color: isActive ? 'var(--color-brand)' : 'var(--text-muted)',
           })}
