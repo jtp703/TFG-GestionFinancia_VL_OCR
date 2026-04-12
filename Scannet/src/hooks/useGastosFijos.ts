@@ -51,7 +51,11 @@ export function useGastosFijos(): UseGastosFijosResult {
         .order('nombre'),
     ])
 
-    setGastosFijos((gastos ?? []) as GastoFijo[])
+    const normalizado: GastoFijo[] = (gastos ?? []).map((g: any) => ({
+      ...g,
+      categoria: Array.isArray(g.categoria) ? (g.categoria[0] ?? null) : (g.categoria ?? null),
+    }))
+    setGastosFijos(normalizado)
     setCategorias(cats ?? [])
     setLoading(false)
   }, [])
