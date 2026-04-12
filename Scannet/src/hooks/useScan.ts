@@ -70,7 +70,13 @@ export function useScan(): UseScanReturn {
       return
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
+    let session: any = null
+    try {
+      const { data } = await supabase.auth.getSession()
+      session = data.session
+    } catch {
+      // getSession puede lanzar si el refresh token es inválido
+    }
     if (!session) {
       setErrorMsg('Sesión expirada. Vuelve a iniciar sesión.')
       setEstado('error')

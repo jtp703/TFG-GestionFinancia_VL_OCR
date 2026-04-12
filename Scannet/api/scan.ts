@@ -50,71 +50,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mimeType: string = mime ?? (dataUrl.match(/data:([^;]+)/)?.[1] ?? 'image/jpeg')
   const metodoPago: string = metodo_pago ?? 'efectivo'
 
-  // Llamar a HuggingFace Inference API — chat completions (image-text-to-text)
-  const hfToken = process.env.HF_API_TOKEN
-  const modelId = process.env.HF_MODEL_ID ?? 'Lacax/deepseek_ocr_lora'
+  // Llamar a Gemini 1.5 Flash — visión + extracción de JSON
+  const geminiKey = process.env.GEMINI_API_KEY
+  if (!geminiKey) return res.status(500).json({ error: 'GEMINI_API_KEY no configurado' })
 
-  if (!hfToken) return res.status(500).json({ error: 'HF_API_TOKEN no configurado' })
+  const PROMPT =
+    'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n' +
+    '{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\n' +
+    'NO other text. ONLY valid JSON.'
 
   let ocrResult: any
   try {
-    const hfResponse = await fetch(
-      `https://api-inference.huggingface.co/models/${modelId}/v1/chat/completions`,
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${hfToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: modelId,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: { url: `data:${mimeType};base64,${base64Image}` },
-                },
-                {
-                  type: 'text',
-                  // Prompt exacto de entrenamiento — no modificar sin reentrenar el modelo
-                  text: 'Extract the following information from the receipt and return it STRICTLY as a valid JSON object matching this structure:\n\n{"comercio": "string", "cif": "string", "fecha": "string", "total": "number", "items": [{"cantidad": "int", "descripcion": "string", "precio": "number"}]}\n\nNO other text. ONLY valid JSON.',
-                },
-              ],
-            },
-          ],
-          max_tokens: 1000,
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: base64Image } },
+              { text: PROMPT },
+            ],
+          }],
+          generationConfig: { temperature: 0, maxOutputTokens: 1024 },
         }),
       }
     )
 
-    if (!hfResponse.ok) {
-      const errText = await hfResponse.text()
-      return res.status(502).json({ error: `Error del modelo OCR: ${errText}` })
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text()
+      return res.status(502).json({ error: `Error Gemini: ${errText}` })
     }
 
-    const raw = await hfResponse.json()
-
-    // Extraer el texto de la respuesta chat completions
-    const text: string =
-      raw?.choices?.[0]?.message?.content ??
-      raw?.generated_text ??
-      raw?.answer ??
-      JSON.stringify(raw)
+    const raw = await geminiRes.json()
+    const text: string = raw?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return res.status(422).json({ error: 'El modelo no devolvió JSON válido', raw: text })
+    if (!jsonMatch) return res.status(422).json({ error: 'Gemini no devolvió JSON válido', raw: text })
 
-    // Normalizar puntuación unicode que el modelo genera en imágenes degradadas
-    const normalized = jsonMatch[0]
-      .replace(/，/g, ',')
-      .replace(/：/g, ':')
-      .replace(/\u201c|\u201d/g, '"')
-
-    ocrResult = JSON.parse(normalized)
+    ocrResult = JSON.parse(jsonMatch[0])
   } catch (err: any) {
-    return res.status(502).json({ error: `Fallo al llamar al modelo: ${err.message}` })
+    return res.status(502).json({ error: `Fallo al llamar a Gemini: ${err.message}` })
   }
 
   return res.status(200).json({
