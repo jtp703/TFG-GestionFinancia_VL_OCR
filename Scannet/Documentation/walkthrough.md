@@ -533,6 +533,42 @@ Rediseño del modelo de datos de productos para evitar duplicados en el catálog
 
 ---
 
+### Sesión 2026-04-12 — Barra de ahorro, fix navbar móvil, fix Scan móvil
+
+**Qué se hizo:**
+
+**Barra de presupuesto con zona de ahorro:**
+- La mini barra de progreso en Home ahora distingue entre presupuesto total y límite de gasto real (presupuesto − ahorro deseado).
+- Zona roja de fondo desde `pctLimite` hasta el final de la barra (reservada para ahorro).
+- Marcador naranja vertical en el punto exacto del límite de gasto.
+- El progreso verde se vuelve rojo si `totalCombinado` supera `limiteGasto`.
+- Texto junto a la barra: `{totalCombinado}€ / {limiteGasto}€` (el divisor es el límite real, no el presupuesto bruto).
+- Solo se renderiza si el usuario tiene `gasto_mensual_estimado > 0` en su perfil.
+
+**Fix navbar móvil — tapado por la barra del navegador:**
+- Problema: la barra de navegación inferior quedaba oculta bajo la barra de Chrome/Safari en iOS/Android.
+- Causa raíz: faltaba `viewport-fit=cover` en la meta viewport y el padding no usaba la variable de safe area.
+- Solución aplicada en tres puntos:
+  - `index.html`: añadido `viewport-fit=cover` a `<meta name="viewport">`.
+  - `BottomNav.tsx`: cambiado de altura fija `56px` + `items-center` a `items-end` con `paddingBottom: 'env(safe-area-inset-bottom, 8px)'`.
+  - `AppLayout.tsx`: cambiado `pb-14` por `paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 8px))'` en `<main>` para compensar el nav dinámico.
+
+**Fix vista Scan en móvil — botón de captura no pulsable:**
+- Problema: el botón de cámara quedaba cortado o no respondía al toque en dispositivos móviles.
+- Causa raíz: el contenedor raíz usaba `h-full`, que no se resuelve correctamente en un `flex-1` sin altura explícita en el padre (`<main>`).
+- Solución en `Scan.tsx`:
+  - Contenedor raíz: eliminado `h-full`, sustituido por `style={{ height: 'calc(100dvh - 64px - env(safe-area-inset-bottom, 8px))' }}`.
+  - Visor de cámara: cambiado de altura fija a `style={{ flex: '1 1 0', minHeight: 0 }}` para que ocupe el espacio disponible restante sin desbordarse.
+  - Los controles inferiores quedan siempre visibles al pie, con el botón circular correctamente centrado y pulsable.
+
+**Archivos modificados:**
+- `index.html` — `viewport-fit=cover`
+- `src/components/BottomNav.tsx` — safe area padding
+- `src/components/AppLayout.tsx` — padding dinámico en `<main>`
+- `src/pages/Scan.tsx` — altura con `100dvh` y `flex: '1 1 0'`
+
+---
+
 ## Mejoras para v2 — Backlog de Requisitos Funcionales
 
 > Esta sección recoge las mejoras identificadas durante el desarrollo de v1.0 que no entraron en scope.

@@ -45,10 +45,17 @@ export function Home() {
   const hayDatos        = !loading && !error && (tickets.length > 0 || gastosFijos.length > 0)
   const sinDatos        = !loading && !error && tickets.length === 0 && gastosFijos.length === 0
 
-  // Indicador de presupuesto (mini barra inline, sin card)
-  const gastoEstimado = perfil?.gasto_mensual_estimado ?? 0
-  const pctPresupuesto = gastoEstimado > 0 ? Math.min((totalCombinado / gastoEstimado) * 100, 100) : 0
-  const colorPresupuesto = pctPresupuesto < 75 ? '#22c55e' : pctPresupuesto < 100 ? '#f97316' : '#ef4444'
+  // Indicador de presupuesto con zona de ahorro
+  const gastoEstimado  = perfil?.gasto_mensual_estimado ?? 0
+  const ahorroDeseado  = perfil?.ahorro_deseado ?? 0
+  // Límite real de gasto = presupuesto - ahorro deseado (o el presupuesto completo si no hay ahorro)
+  const limiteGasto    = gastoEstimado > 0 && ahorroDeseado > 0
+    ? Math.max(gastoEstimado - ahorroDeseado, 0)
+    : gastoEstimado
+  const pctLimite      = gastoEstimado > 0 ? (limiteGasto / gastoEstimado) * 100 : 100
+  const pctGasto       = gastoEstimado > 0 ? Math.min((totalCombinado / gastoEstimado) * 100, 100) : 0
+  const superaLimite   = limiteGasto > 0 && totalCombinado > limiteGasto
+  const colorGasto     = superaLimite ? '#ef4444' : '#22c55e'
 
   return (
     <div className="flex flex-col pb-4">
@@ -58,14 +65,47 @@ export function Home() {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
             Gastos de {new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
           </h1>
-          {/* Mini indicador de presupuesto — solo si hay estimado */}
+          {/* Barra de presupuesto con zona de ahorro */}
           {gastoEstimado > 0 && !loading && (
-            <div className="flex items-center gap-2 mt-1">
-              <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-                <div style={{ width: `${pctPresupuesto}%`, background: colorPresupuesto, height: '100%' }} />
+            <div className="flex items-center gap-2 mt-1.5">
+              {/* Barra */}
+              <div className="relative w-28 h-2 rounded-full" style={{ background: 'var(--border)' }}>
+                {/* Zona roja de fondo (reservada para ahorro) */}
+                {ahorroDeseado > 0 && pctLimite < 100 && (
+                  <div style={{
+                    position: 'absolute', top: 0, bottom: 0,
+                    left: `${pctLimite}%`, right: 0,
+                    background: '#ef444430',
+                    borderRadius: '0 9999px 9999px 0',
+                  }} />
+                )}
+                {/* Progreso de gasto */}
+                <div style={{
+                  position: 'absolute', top: 0, bottom: 0, left: 0,
+                  width: `${pctGasto}%`,
+                  background: colorGasto,
+                  borderRadius: '9999px',
+                  transition: 'width 0.5s',
+                }} />
+                {/* Marcador naranja en el límite de ahorro */}
+                {ahorroDeseado > 0 && pctLimite < 100 && (
+                  <div style={{
+                    position: 'absolute', top: '-3px', bottom: '-3px',
+                    left: `${pctLimite}%`,
+                    width: '2px',
+                    background: '#f97316',
+                    transform: 'translateX(-50%)',
+                    borderRadius: '1px',
+                  }} />
+                )}
               </div>
-              <span className="text-xs" style={{ color: colorPresupuesto }}>
-                {totalCombinado.toFixed(0)} / {gastoEstimado.toFixed(0)} €
+              {/* Texto */}
+              <span className="text-xs" style={{ color: colorGasto }}>
+                {totalCombinado.toFixed(0)}€
+                {' / '}
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {limiteGasto.toFixed(0)}€
+                </span>
               </span>
             </div>
           )}

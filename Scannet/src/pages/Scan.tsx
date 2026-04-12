@@ -148,9 +148,15 @@ export function Scan() {
 
   // Estado IDLE — visor de cámara
   return (
-    <div className="flex flex-col h-full" style={{ color: 'var(--text-primary)' }}>
+    <div
+      className="flex flex-col"
+      style={{
+        color: 'var(--text-primary)',
+        height: 'calc(100dvh - 64px - env(safe-area-inset-bottom, 8px))',
+      }}
+    >
       {/* Visor */}
-      <div className="relative flex-1 bg-black overflow-hidden">
+      <div className="relative bg-black overflow-hidden" style={{ flex: '1 1 0', minHeight: 0 }}>
         {camError ? (
           <div className="flex items-center justify-center h-full px-6 text-center text-white text-sm">
             {camError}
