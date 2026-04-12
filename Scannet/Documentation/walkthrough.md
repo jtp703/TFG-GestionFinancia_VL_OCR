@@ -489,3 +489,130 @@ Rediseño del modelo de datos de productos para evitar duplicados en el catálog
 - `src/components/DrillDown.tsx`
 - `src/hooks/usePerfil.ts`
 - `src/pages/Home.tsx`
+
+---
+
+### Sesión 2026-04-12 — Gastos fijos, emojis, tema y rediseño Home
+
+**Qué se hizo:**
+
+**Gastos fijos en el donut:**
+- Nueva tabla `gasto_fijo` (usuario_id, nombre, precio, emoji, categoria_id, activo).
+- Hook `useGastosFijos` con CRUD completo: `crear`, `actualizar`, `eliminar` (soft delete con `activo=false`).
+- Los gastos fijos se suman a los totales por categoría en el donut (combinados con gastos de tickets).
+- Las categorías con algún gasto fijo muestran el icono 🔒 en `CategoriaList`.
+- En `DrillDown`, al abrir una categoría se muestra primero la sección "Gastos fijos" y luego los tickets.
+
+**Modal de gestión:**
+- `GastosFijosModal` — panel deslizante (igual estilo que DrillDown) con lista + formulario inline.
+- Formulario: selector de emoji (grid), nombre, importe mensual, categoría (dropdown Supabase).
+- Accesible desde botón "🔒 Fijos" en la cabecera de Home.
+
+**Sistema de emojis:**
+- `categoryColors.ts` exporta `getCategoryEmoji()` con mapa fijo para las 6 categorías del sistema.
+- `EMOJIS_GASTO` — lista de 25 emojis seleccionables para gastos fijos.
+- `CategoriaList` muestra el emoji en una burbuja coloreada en lugar del punto de color anterior.
+
+**Rediseño Home:**
+- Eliminados los dos paneles de presupuesto y ahorro.
+- Sustituidos por una mini barra de progreso de una línea bajo el título (solo visible si el usuario tiene gasto estimado configurado).
+- El donut se muestra también cuando hay gastos fijos aunque no haya tickets escaneados.
+
+**Tema claro/oscuro:**
+- Revisado `useTheme.ts` — implementación correcta: `localStorage` (instantáneo) + Supabase (sincronización entre dispositivos). Sin bug. Persiste correctamente entre recargas.
+
+**Archivos creados/modificados:**
+- `database/migration_gasto_fijo.sql` — ejecutar en Supabase SQL Editor
+- `database/schema.sql` — tabla `gasto_fijo` añadida
+- `src/lib/categoryColors.ts` — `getCategoryEmoji`, `EMOJIS_GASTO`
+- `src/hooks/useGastosFijos.ts` — nuevo hook CRUD
+- `src/components/GastosFijosModal.tsx` — nuevo componente
+- `src/components/CategoriaList.tsx` — emojis + candado
+- `src/components/DrillDown.tsx` — sección gastos fijos
+- `src/pages/Home.tsx` — rediseño completo
+
+---
+
+## Mejoras para v2 — Backlog de Requisitos Funcionales
+
+> Esta sección recoge las mejoras identificadas durante el desarrollo de v1.0 que no entraron en scope.
+> Formato RF (Requisito Funcional) para facilitar su incorporación en la memoria del TFG o en el planning de v2.
+
+---
+
+### RF-V2-01 — Historial de meses anteriores
+**Descripción:** El usuario puede navegar entre meses anteriores en la pantalla de Gastos.
+**Motivación:** Actualmente solo se muestra el mes en curso. El usuario no puede ver su historial.
+**Impacto:** Alto — funcionalidad básica de cualquier app de finanzas personales.
+**Requisitos técnicos:** Selector de mes en la cabecera de Home; parametrizar el rango de fechas en `/api/tickets`.
+
+---
+
+### RF-V2-02 — Edición de tickets guardados
+**Descripción:** El usuario puede editar un ticket ya guardado (corregir comercio, fecha, productos).
+**Motivación:** El OCR puede cometer errores que el usuario solo detecta después de guardar.
+**Impacto:** Alto — la verificación post-guardado es necesaria para mantener datos limpios.
+**Requisitos técnicos:** Endpoint PATCH `/api/tickets/:id`; reutilizar `VerifyForm` en modo edición.
+
+---
+
+### RF-V2-03 — Eliminación de tickets
+**Descripción:** El usuario puede eliminar un ticket guardado (con confirmación).
+**Motivación:** Corrección de errores o duplicados no detectados.
+**Impacto:** Medio.
+**Requisitos técnicos:** Soft delete (`eliminado = true`) en tabla `ticket`; filtrar en `/api/tickets`.
+
+---
+
+### RF-V2-04 — Modelo OCR de mayor calidad
+**Descripción:** Sustituir el pipeline OCR.space + DeepSeek-chat por un LLM con visión (GPT-4o mini, Gemini Flash, Claude Haiku) que procese imagen → JSON en un solo paso.
+**Motivación:** OCR.space tiene calidad limitada con tickets de baja resolución o letra pequeña. El pipeline de dos pasos introduce latencia y puntos de fallo.
+**Impacto:** Alto — calidad del producto principal.
+**Hoja de ruta:** OCR.space+DeepSeek (v1) → LLM visión (v2) → modelo fine-tuned propio (v3 si el tiempo lo permite).
+
+---
+
+### RF-V2-05 — Notificaciones de presupuesto
+**Descripción:** Alerta al usuario cuando supera el 80% y el 100% del gasto mensual estimado.
+**Motivación:** El indicador visual existe pero es pasivo — el usuario tiene que abrir la app.
+**Impacto:** Medio — mejora el valor de la app de finanzas.
+**Requisitos técnicos:** Push notifications (web push API) o email via Supabase Edge Functions.
+
+---
+
+### RF-V2-06 — Categorías personalizables
+**Descripción:** El usuario puede crear, renombrar y asignar color/emoji a sus propias categorías.
+**Motivación:** Las 6 categorías fijas no cubren todos los casos de uso (ej: mascotas, viajes, regalos).
+**Impacto:** Medio.
+**Requisitos técnicos:** Tabla `categoria_usuario`; lógica de fallback a categorías del sistema.
+
+---
+
+### RF-V2-07 — Exportación de datos
+**Descripción:** El usuario puede exportar sus gastos del mes (o un rango) en CSV o PDF.
+**Motivación:** Utilidad para declaración de impuestos, seguimiento personal o transferencia a otras apps.
+**Impacto:** Bajo-medio.
+**Requisitos técnicos:** Endpoint GET `/api/export?format=csv&from=&to=`; generación de PDF con jsPDF o similar.
+
+---
+
+### RF-V2-08 — Imagen del ticket visible en detalle
+**Descripción:** Al abrir un ticket en DrillDown, el usuario puede ver la foto del ticket escaneado.
+**Motivación:** Útil para verificar el OCR o recordar compras.
+**Requisitos técnicos:** `supabase.storage.createSignedUrl(path, 3600)` en el componente de detalle; `imagen_url` ya guarda el path.
+
+---
+
+### RF-V2-09 — Modo compartido / multi-usuario por hogar
+**Descripción:** Varios usuarios pueden compartir un "hogar" y ver gastos combinados.
+**Motivación:** Parejas o familias que comparten presupuesto.
+**Impacto:** Alto en diferenciación, alto en complejidad.
+**Requisitos técnicos:** Tabla `hogar`; invitaciones; RLS por `hogar_id`.
+
+---
+
+### RF-V2-10 — Gestión del perfil financiero desde la app
+**Descripción:** El usuario puede modificar su gasto estimado, ahorro deseado y gastos fijos desde la pantalla de Cuenta (sin tener que pasar por el onboarding).
+**Motivación:** Los valores introducidos en el onboarding pueden cambiar con el tiempo.
+**Impacto:** Medio — mejora la usabilidad del perfil.
+**Requisitos técnicos:** Formulario editable en `Cuenta.tsx`; PATCH a `perfil_usuario`.

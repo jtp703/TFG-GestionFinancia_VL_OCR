@@ -129,9 +129,10 @@
 | 9.5 | Refactorizar insert de productos en `useScan.ts` — deduplicar por nombre+precio | 9.3 | ✅ |
 | 9.6 | Implementar comparativa gasto estimado vs. real en pantalla de gastos | — | ✅ |
 | 9.7 | Fix `subirImagen`: guardar path en lugar de URL pública (bucket privado) | — | ✅ |
-| 9.8 | Verificar que `/api/tickets` devuelve datos reales tras deploy | 9.4 | ⏳ |
-| 9.9 | Test end-to-end: escanear → verificar → guardar → ver en donut | 9.1–9.8 | ⏳ |
-| 9.10 | Evaluar calidad OCR y migrar modelo cuando el flujo esté estable | 9.9 | ⏳ |
+| 9.8 | Verificar que `/api/tickets` devuelve datos reales tras deploy | 9.4 | ✅ |
+| 9.9 | Test end-to-end: escanear → verificar → guardar → ver en donut | 9.1–9.8 | ✅ |
+| 9.10 | Gastos fijos: tabla, hook, modal, integración donut + emojis + candado | — | ⚠️ Pendiente ejecutar SQL |
+| 9.11 | Evaluar calidad OCR y migrar modelo cuando el flujo esté estable | 9.9 | ⏳ |
 
 ---
 

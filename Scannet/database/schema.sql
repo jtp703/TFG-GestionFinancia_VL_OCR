@@ -73,6 +73,22 @@ CREATE TABLE IF NOT EXISTS ticket_producto (
 );
 
 -- ============================================================
+-- TABLA: gasto_fijo
+-- Gastos fijos mensuales del usuario (alquiler, suscripciones, etc.)
+-- Se integran en el donut junto con los gastos de tickets.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS gasto_fijo (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  nombre       text NOT NULL,
+  precio       numeric NOT NULL DEFAULT 0,
+  emoji        text,
+  categoria_id uuid REFERENCES categoria(id),
+  activo       boolean NOT NULL DEFAULT true,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- Cada usuario solo accede a sus propios datos.
 -- ============================================================
@@ -81,6 +97,7 @@ ALTER TABLE ticket           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE producto         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_producto  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categoria        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gasto_fijo       ENABLE ROW LEVEL SECURITY;
 
 -- perfil_usuario: el usuario solo ve y edita su propio perfil
 CREATE POLICY "perfil_usuario: solo el propio usuario"
@@ -126,6 +143,12 @@ CREATE POLICY "ticket_producto: insertar para propietario"
         AND t.usuario_id = auth.uid()
     )
   );
+
+-- gasto_fijo: solo el propio usuario
+CREATE POLICY "gasto_fijo: solo el propio usuario"
+  ON gasto_fijo FOR ALL
+  USING  (auth.uid() = usuario_id)
+  WITH CHECK (auth.uid() = usuario_id);
 
 -- categoria: lectura pública (son fijas del sistema)
 CREATE POLICY "categoria: lectura publica"
