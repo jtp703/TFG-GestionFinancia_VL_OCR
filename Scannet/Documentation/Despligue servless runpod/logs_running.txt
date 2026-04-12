@@ -1,25 +1,24 @@
-2026-04-11T13:29:44.897327207Z ==========
-2026-04-11T13:29:44.897329819Z == CUDA ==
-2026-04-11T13:29:44.897390820Z ==========
-2026-04-11T13:29:44.901204858Z CUDA Version 12.1.1
-2026-04-11T13:29:44.902111914Z Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-2026-04-11T13:29:44.904163473Z This container image and its contents are governed by the NVIDIA Deep Learning Container License.
-2026-04-11T13:29:44.904169733Z By pulling and using the container, you accept the terms and conditions of this license:
-2026-04-11T13:29:44.904174139Z https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
-2026-04-11T13:29:44.904182606Z A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
-2026-04-11T13:29:50.522368243Z [worker] Cargando modelo base (unsloth/DeepSeek-OCR-2, público)...
-2026-04-11T13:29:50.811425624Z Encountered exception while importing matplotlib: No module named 'matplotlib'
-2026-04-11T13:29:50.812618370Z Traceback (most recent call last):
-2026-04-11T13:29:50.812639984Z   File "/app/handler.py", line 43, in <module>
-2026-04-11T13:29:50.812647941Z     model = AutoModel.from_pretrained(
-2026-04-11T13:29:50.812652351Z   File "/usr/local/lib/python3.10/dist-packages/transformers/models/auto/auto_factory.py", line 549, in from_pretrained
-2026-04-11T13:29:50.812657047Z     config, kwargs = AutoConfig.from_pretrained(
-2026-04-11T13:29:50.812661090Z   File "/usr/local/lib/python3.10/dist-packages/transformers/models/auto/configuration_auto.py", line 1302, in from_pretrained
-2026-04-11T13:29:50.812665197Z     config_class = get_class_from_dynamic_module(
-2026-04-11T13:29:50.812669867Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 569, in get_class_from_dynamic_module
-2026-04-11T13:29:50.812674330Z     final_module = get_cached_module_file(
-2026-04-11T13:29:50.812678570Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 392, in get_cached_module_file
-2026-04-11T13:29:50.812682727Z     modules_needed = check_imports(resolved_module_file)
-2026-04-11T13:29:50.812686741Z   File "/usr/local/lib/python3.10/dist-packages/transformers/dynamic_module_utils.py", line 224, in check_imports
-2026-04-11T13:29:50.812690887Z     raise ImportError(
-2026-04-11T13:29:50.812695767Z ImportError: This modeling file requires the following packages that were not found in your environment: matplotlib. Run `pip install matplotlib`
+ y2026-04-11T19:32:07.803126475Z ==========
+2026-04-11T19:32:07.803150780Z == CUDA ==
+2026-04-11T19:32:07.803216126Z ==========
+2026-04-11T19:32:07.806117546Z CUDA Version 12.1.1
+2026-04-11T19:32:07.807345741Z Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+2026-04-11T19:32:07.809093001Z This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+2026-04-11T19:32:07.809102654Z By pulling and using the container, you accept the terms and conditions of this license:
+2026-04-11T19:32:07.809108120Z https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+2026-04-11T19:32:07.809119691Z A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+2026-04-11T19:32:13.571578032Z [worker] Verificando modelo base en cache...
+2026-04-11T19:32:13.571613565Z [worker] Descargando unsloth/DeepSeek-OCR-2 (primera vez — varios GB)...
+2026-04-11T19:32:21.162056930Z 
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]
+Fetching 16 files:   6%|▋         | 1/16 [00:00<00:05,  2.72it/s]
+Fetching 16 files:  25%|██▌       | 4/16 [00:00<00:02,  4.93it/s]
+Fetching 16 files:  56%|█████▋    | 9/16 [00:07<00:06,  1.06it/s]
+Fetching 16 files: 100%|██████████| 16/16 [00:07<00:00,  2.14it/s]
+2026-04-11T19:32:21.163688731Z [worker] Descarga completa.
+2026-04-11T19:32:21.401133806Z [worker] Cargando modelo base desde cache local...
+2026-04-11T19:32:21.497724367Z You are using a model of type deepseek_vl_v2 to instantiate a model of type DeepseekOCR2. This is not supported for all configurations of models and can yield errors.
+2026-04-11T19:32:21.497774483Z `torch_dtype` is deprecated! Use `dtype` instead!
+2026-04-11T19:32:25.447952323Z [worker] Aplicando adaptador LoRA (Lacax/deepseek_ocr_lora)...
+2026-04-11T19:32:37.161927733Z [worker] Modelo listo — dtype=torch.bfloat16, device=cuda:0
+2026-04-11T19:32:37.162879221Z --- Starting Serverless Worker |  Version 1.7.3 ---

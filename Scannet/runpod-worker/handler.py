@@ -71,19 +71,12 @@ model = AutoModel.from_pretrained(
     device_map="cuda",
 )
 tokenizer = AutoTokenizer.from_pretrained(LOCAL_DIR, trust_remote_code=True)
-# FastVisionModel.for_training/for_inference (Unsloth) hace esto internamente.
-# Sin este flag, tokenizer.encode("") devuelve [0] (BOS) en lugar de [],
-# lo que añade un token espurio al final del input y rompe la generación.
-tokenizer.add_bos_token = False
+# add_bos_token se deja en su valor por defecto — Cell 3 del notebook no lo modifica.
+# El collator añade BOS manualmente, así que el comportamiento del tokenizer no afecta.
 
 print("[worker] Aplicando adaptador LoRA (Lacax/deepseek_ocr_lora)...")
 model = PeftModel.from_pretrained(model, LORA_MODEL_ID, token=HF_TOKEN)
-
-# Merge LoRA weights into base model — necesario para que generate() funcione igual
-# que FastVisionModel.for_inference() del notebook (que hace merge internamente).
-# Sin merge, el PeftModel.generate() produce output incorrecto (ej: solo "} ").
-print("[worker] Mergeando pesos LoRA en el modelo base...")
-model = model.merge_and_unload()
+# Sin merge_and_unload — Cell 3 del notebook funciona con PeftModel directo.
 model.eval()
 print(f"[worker] Modelo listo — dtype={model.dtype}, device={next(model.parameters()).device}")
 
