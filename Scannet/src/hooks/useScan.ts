@@ -123,7 +123,9 @@ export function useScan(): UseScanReturn {
     }
   }
 
-  /** Sube la imagen a Supabase Storage y devuelve la URL, o null si falla */
+  /** Sube la imagen a Supabase Storage y devuelve el path, o null si falla.
+   *  Se guarda el path (no la URL) porque el bucket es privado.
+   *  Para mostrar la imagen usar createSignedUrl(path, segundos). */
   async function subirImagen(blob: Blob, userId: string): Promise<string | null> {
     try {
       const path = `${userId}/${Date.now()}.jpg`
@@ -131,8 +133,7 @@ export function useScan(): UseScanReturn {
         .from('tickets')
         .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
       if (error) return null
-      const { data } = supabase.storage.from('tickets').getPublicUrl(path)
-      return data.publicUrl ?? null
+      return path
     } catch {
       return null
     }

@@ -385,5 +385,68 @@ vercel dev   # Puerto 3000
 4. Si el donut aparece vacío pero hay tickets en Supabase → revisar la respuesta de `/api/tickets` en Network
 
 **Pendiente (manual en Supabase Dashboard):**
-- Tarea 9.1: Crear bucket `tickets` → Storage → New bucket → nombre `tickets` → Private
-- Tarea 9.2: Añadir RLS policy INSERT: `(bucket_id = 'tickets') AND (auth.uid()::text = (storage.foldername(name))[1])`
+- Tarea 9.1: Crear bucket `tickets` → Storage → New bucket → nombre `tickets` → Private ✅
+- Tarea 9.2: Añadir RLS policy INSERT Storage ✅
+
+---
+
+### Sesión 2026-04-12 — Tareas 9.3 + 9.5: Deduplicación de productos con tabla intermedia
+
+**Qué se hizo:**
+
+Rediseño del modelo de datos de productos para evitar duplicados en el catálogo:
+
+- `producto` pasa a ser un **catálogo compartido**: solo guarda `descripcion` y `precio_unitario`. Sin `ticket_id`, `cantidad` ni `precio_total`.
+- Nueva tabla **`ticket_producto`** (N:M): asocia un ticket con un producto y añade `cantidad` y `precio_total` de esa línea.
+- Índice único funcional `lower(descripcion), precio_unitario` — evita duplicados aunque el OCR devuelva mayúsculas/minúsculas inconsistentes.
+- `useScan.ts → guardar()`: antes de insertar un producto, busca en el catálogo por `ilike(descripcion)` + `precio_unitario`. Si existe, reutiliza el id. Si no, lo crea. Luego inserta en `ticket_producto`.
+- `api/tickets.ts`: la query ahora une a través de `ticket_producto` y aplana los datos al mismo formato `Producto` que espera el frontend — sin cambios en los componentes de UI.
+
+**Archivos modificados:**
+- `database/migration_ticket_producto.sql` — script de migración para ejecutar en Supabase SQL Editor
+- `database/schema.sql` — schema canónico actualizado
+- `src/hooks/useScan.ts` — función `guardar()` con deduplicación
+- `api/tickets.ts` — query a través de `ticket_producto`
+
+**Cómo aplicar (manual):**
+1. Supabase Dashboard → SQL Editor → pegar y ejecutar `database/migration_ticket_producto.sql`
+2. Desplegar en Vercel
+3. Escanear un ticket y verificar en Supabase que: se crea 1 fila en `ticket`, N filas en `ticket_producto`, y los productos en `producto` no se repiten si coinciden nombre+precio
+
+**Decisiones:**
+- El catálogo es compartido entre todos los usuarios (RLS abierto en lectura/insert para autenticados). Esto es correcto para v1.0 — los productos son datos objetivos (nombre + precio), no datos personales.
+- No se implementó UPDATE ni DELETE en `producto` — el catálogo es inmutable desde el frontend.
+
+---
+
+### Sesión 2026-04-12 — Tarea 9.6: Presupuesto mensual estimado vs. real
+
+**Qué se hizo:**
+
+- Nuevo hook `src/hooks/usePerfil.ts` — lee `gasto_mensual_estimado` y `ahorro_deseado` de `perfil_usuario` para el usuario autenticado.
+- Componente inline `PresupuestoBar` en `Home.tsx` — barra de progreso que compara el gasto real del mes con el estimado definido en el onboarding.
+- La barra solo se muestra si el usuario introdujo un `gasto_mensual_estimado > 0` en su perfil.
+- Colores adaptativos: verde < 75%, naranja 75–100%, rojo al exceder. Muestra euros restantes o excedidos.
+
+**Archivos modificados:**
+- `src/hooks/usePerfil.ts` — nuevo hook
+- `src/pages/Home.tsx` — `PresupuestoBar` + uso de `usePerfil`
+
+**Cómo probar:**
+1. Asegurarse de tener un valor en `gasto_mensual_estimado` en el perfil (columna en Supabase → tabla `perfil_usuario`).
+2. Abrir la pantalla de Gastos — debe aparecer la barra debajo del título y encima del donut.
+3. Si el campo es null o 0, la barra no aparece.
+
+---
+
+### Sesión 2026-04-12 — Tarea 9.7: Fix Storage bucket privado
+
+**Qué se hizo:**
+
+- `subirImagen()` en `useScan.ts` guardaba el resultado de `getPublicUrl()` — inaccesible en buckets privados.
+- Cambiado para devolver el `path` del archivo (`userId/timestamp.jpg`) en lugar de la URL.
+- `imagen_url` en la tabla `ticket` ahora almacena el path, no una URL.
+
+**Por qué:** El bucket `tickets` es privado (datos personales). Las URLs públicas no funcionan. Para mostrar la imagen en el futuro se debe llamar a `supabase.storage.from('tickets').createSignedUrl(path, 3600)` en el componente que la muestre.
+
+**Archivo modificado:** `src/hooks/useScan.ts` → función `subirImagen()`
