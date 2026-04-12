@@ -226,21 +226,52 @@ export function useScan(): UseScanReturn {
       return
     }
 
-    // Insertar productos
-    const productos = datos.items.map(item => ({
-      ticket_id:       ticket.id,
-      descripcion:     item.descripcion,
-      cantidad:        item.cantidad,
-      precio_unitario: item.precio,
-      precio_total:    item.cantidad * item.precio,
-    }))
+    // Insertar productos con deduplicación por (descripcion, precio_unitario)
+    for (const item of datos.items) {
+      // Buscar si ya existe un producto con mismo nombre (case-insensitive) y precio
+      const { data: existente } = await supabase
+        .from('producto')
+        .select('id')
+        .ilike('descripcion', item.descripcion)
+        .eq('precio_unitario', item.precio)
+        .maybeSingle()
 
-    const { error: prodError } = await supabase.from('producto').insert(productos)
+      let productoId: string
 
-    if (prodError) {
-      setErrorMsg(prodError.message)
-      setEstado('error')
-      return
+      if (existente) {
+        // Reutilizar el producto ya existente en el catálogo
+        productoId = existente.id
+      } else {
+        // Crear nuevo producto en el catálogo
+        const { data: nuevo, error: prodError } = await supabase
+          .from('producto')
+          .insert({ descripcion: item.descripcion, precio_unitario: item.precio })
+          .select('id')
+          .single()
+
+        if (prodError || !nuevo) {
+          setErrorMsg(prodError?.message ?? 'Error al guardar producto')
+          setEstado('error')
+          return
+        }
+        productoId = nuevo.id
+      }
+
+      // Asociar producto al ticket con cantidad y precio_total
+      const { error: tpError } = await supabase
+        .from('ticket_producto')
+        .insert({
+          ticket_id:    ticket.id,
+          producto_id:  productoId,
+          cantidad:     item.cantidad,
+          precio_total: item.cantidad * item.precio,
+        })
+
+      if (tpError) {
+        setErrorMsg(tpError.message)
+        setEstado('error')
+        return
+      }
     }
 
     setEstado('success')

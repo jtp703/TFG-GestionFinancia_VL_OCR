@@ -124,9 +124,9 @@
 |---|-------|------------|--------|
 | 9.1 | Crear bucket `tickets` privado en Supabase Storage (manual) | — | ✅ |
 | 9.2 | Añadir RLS policy INSERT en Storage para usuarios autenticados | 9.1 | ✅ |
-| 9.3 | Schema `ticket_producto` — crear tabla intermedia + constraint único en `producto` | — | ⏳ |
+| 9.3 | Schema `ticket_producto` — crear tabla intermedia + constraint único en `producto` | — | ⚠️ Pendiente ejecutar SQL |
 | 9.4 | Cambiar `USE_MOCK = false` en `useTickets.ts` | — | ✅ |
-| 9.5 | Refactorizar insert de productos en `useScan.ts` — deduplicar por nombre+precio | 9.3 | ⏳ |
+| 9.5 | Refactorizar insert de productos en `useScan.ts` — deduplicar por nombre+precio | 9.3 | ✅ |
 | 9.6 | Implementar comparativa gasto estimado vs. real en pantalla de gastos | — | ⏳ |
 | 9.7 | Fix `subirImagen`: cambiar `getPublicUrl` por `createSignedUrl` | — | ⏳ |
 | 9.8 | Verificar que `/api/tickets` devuelve datos reales tras deploy | 9.4 | ⏳ |

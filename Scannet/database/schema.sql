@@ -45,25 +45,42 @@ CREATE TABLE IF NOT EXISTS ticket (
 
 -- ============================================================
 -- TABLA: producto
--- Líneas individuales de cada ticket.
+-- Catálogo compartido de productos. Único por (descripcion, precio_unitario).
+-- La relación con tickets se gestiona mediante ticket_producto.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS producto (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_id        uuid NOT NULL REFERENCES ticket(id) ON DELETE CASCADE,
   descripcion      text NOT NULL,
-  cantidad         numeric NOT NULL DEFAULT 1,
-  precio_unitario  numeric NOT NULL DEFAULT 0,
-  precio_total     numeric NOT NULL DEFAULT 0
+  precio_unitario  numeric NOT NULL DEFAULT 0
+);
+
+-- Índice único case-insensitive: evita duplicados como "Leche" y "LECHE" al mismo precio
+CREATE UNIQUE INDEX IF NOT EXISTS producto_lower_desc_precio_unique
+  ON producto (lower(descripcion), precio_unitario);
+
+-- ============================================================
+-- TABLA: ticket_producto
+-- Relación N:M entre ticket y producto (tabla intermedia).
+-- Almacena cantidad y precio_total de ese producto en ese ticket.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ticket_producto (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id    uuid NOT NULL REFERENCES ticket(id) ON DELETE CASCADE,
+  producto_id  uuid NOT NULL REFERENCES producto(id) ON DELETE CASCADE,
+  cantidad     numeric NOT NULL DEFAULT 1,
+  precio_total numeric NOT NULL DEFAULT 0,
+  UNIQUE (ticket_id, producto_id)
 );
 
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- Cada usuario solo accede a sus propios datos.
 -- ============================================================
-ALTER TABLE perfil_usuario ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ticket          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE producto        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categoria       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE perfil_usuario  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE producto         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_producto  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categoria        ENABLE ROW LEVEL SECURITY;
 
 -- perfil_usuario: el usuario solo ve y edita su propio perfil
 CREATE POLICY "perfil_usuario: solo el propio usuario"
@@ -79,14 +96,33 @@ CREATE POLICY "ticket: solo el propio usuario"
   USING (auth.uid() = usuario_id)
   WITH CHECK (auth.uid() = usuario_id);
 
--- producto: accesible si el ticket pertenece al usuario
-CREATE POLICY "producto: solo el propio usuario"
-  ON producto
-  FOR ALL
+-- producto: catálogo compartido — cualquier usuario autenticado puede leer e insertar
+CREATE POLICY "producto: lectura autenticada"
+  ON producto FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "producto: insertar autenticado"
+  ON producto FOR INSERT
+  WITH CHECK (auth.uid() IS NOT NULL);
+
+-- ticket_producto: leer si el ticket pertenece al usuario
+CREATE POLICY "ticket_producto: leer propios"
+  ON ticket_producto FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM ticket t
-      WHERE t.id = producto.ticket_id
+      WHERE t.id = ticket_producto.ticket_id
+        AND t.usuario_id = auth.uid()
+    )
+  );
+
+-- ticket_producto: insertar si el ticket pertenece al usuario
+CREATE POLICY "ticket_producto: insertar para propietario"
+  ON ticket_producto FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM ticket t
+      WHERE t.id = ticket_producto.ticket_id
         AND t.usuario_id = auth.uid()
     )
   );
