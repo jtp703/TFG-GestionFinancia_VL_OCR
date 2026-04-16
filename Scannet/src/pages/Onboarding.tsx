@@ -48,6 +48,7 @@ export function Onboarding() {
   const [gastosFijos, setGastosFijos]     = useState<GastoFijoOnboarding[]>([])
   const [nuevoNombre, setNuevoNombre]     = useState('')
   const [nuevoPrecio, setNuevoPrecio]     = useState('')
+  const [guardando, setGuardando]         = useState(false)
 
   const TOTAL = PASOS_NUMERICOS.length + 1  // 2 pasos numéricos + 1 paso gastos fijos
   const esUltimoPaso = paso === TOTAL - 1
@@ -69,6 +70,8 @@ export function Onboarding() {
 
   /** Guarda el perfil y los gastos fijos en Supabase, luego redirige. */
   const guardarYSalir = async () => {
+    if (guardando) return
+    setGuardando(true)
     // Obtener uid desde sesión activa como fuente de verdad
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id ?? user?.id
@@ -205,15 +208,18 @@ export function Onboarding() {
                 onBlur={e => (e.target.style.borderColor = 'var(--border)')}
                 onKeyDown={e => e.key === 'Enter' && agregarGasto()}
               />
-              <div className="relative w-24">
+              <div
+                className="relative flex-shrink-0"
+                style={{ width: `${Math.max(3.5, (nuevoPrecio.length || 1) + 2)}ch` }}
+              >
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="0"
                   value={nuevoPrecio}
-                  onChange={e => setNuevoPrecio(e.target.value)}
-                  className="w-full rounded-input px-3 py-2 text-body outline-none pr-5"
+                  onChange={e => { if (e.target.value.length <= 8) setNuevoPrecio(e.target.value) }}
+                  className="w-full rounded-input px-3 py-2 text-body outline-none pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={inputStyle}
                   onFocus={e => (e.target.style.borderColor = 'var(--color-brand)')}
                   onBlur={e => (e.target.style.borderColor = 'var(--border)')}
@@ -248,10 +254,11 @@ export function Onboarding() {
           </button>
           <button
             onClick={siguiente}
-            className="flex-1 rounded-btn py-[10px] text-body font-medium text-white"
+            disabled={guardando}
+            className="flex-1 rounded-btn py-[10px] text-body font-medium text-white disabled:opacity-60"
             style={{ background: 'var(--color-brand)' }}
           >
-            {esUltimoPaso ? 'Empezar →' : 'Siguiente →'}
+            {guardando ? 'Guardando...' : esUltimoPaso ? 'Empezar →' : 'Siguiente →'}
           </button>
         </div>
       </div>
