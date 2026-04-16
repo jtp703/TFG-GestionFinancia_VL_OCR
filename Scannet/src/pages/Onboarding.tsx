@@ -234,8 +234,8 @@ export function Onboarding() {
                     minWidth: '2ch',
                     maxWidth: '7ch',
                   }}
-                  onFocus={e => (e.parentElement!.style.borderColor = 'var(--color-brand)')}
-                  onBlur={e => (e.parentElement!.style.borderColor = 'var(--border)')}
+                  onFocus={e => (e.target.parentElement!.style.borderColor = 'var(--color-brand)')}
+                  onBlur={e => (e.target.parentElement!.style.borderColor = 'var(--border)')}
                   onKeyDown={e => e.key === 'Enter' && agregarGasto()}
                 />
                 <span className="text-caption flex-shrink-0" style={{ color: 'var(--text-muted)' }}>€</span>
