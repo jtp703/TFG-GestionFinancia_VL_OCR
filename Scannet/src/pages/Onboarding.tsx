@@ -49,6 +49,7 @@ export function Onboarding() {
   const [nuevoNombre, setNuevoNombre]     = useState('')
   const [nuevoPrecio, setNuevoPrecio]     = useState('')
   const [guardando, setGuardando]         = useState(false)
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
 
   const TOTAL = PASOS_NUMERICOS.length + 1  // 2 pasos numéricos + 1 paso gastos fijos
   const esUltimoPaso = paso === TOTAL - 1
@@ -95,15 +96,25 @@ export function Onboarding() {
             categoria_id: null,
           }))
         )
-        if (gastosError) console.error('[Onboarding] gasto_fijo insert error:', gastosError)
+        if (gastosError) {
+          console.error('[Onboarding] gasto_fijo insert error:', gastosError)
+          setErrorGuardado(`Error guardando gastos fijos: ${gastosError.message}`)
+          setGuardando(false)
+          return
+        }
       }
     } else {
       console.error('[Onboarding] guardarYSalir llamado sin sesión activa')
+      setErrorGuardado('No hay sesión activa. Vuelve a iniciar sesión.')
+      setGuardando(false)
+      return
     }
     navigate('/')
   }
 
   const siguiente = () => {
+    // Paso 1 (gasto estimado) es obligatorio — sin él la barra de presupuesto no funciona
+    if (paso === 0 && (!datos.gasto_mensual_estimado || Number(datos.gasto_mensual_estimado) <= 0)) return
     if (!esUltimoPaso) setPaso(p => p + 1)
     else guardarYSalir()
   }
@@ -208,24 +219,26 @@ export function Onboarding() {
                 onBlur={e => (e.target.style.borderColor = 'var(--border)')}
                 onKeyDown={e => e.key === 'Enter' && agregarGasto()}
               />
-              <div
-                className="relative flex-shrink-0"
-                style={{ width: `${Math.max(3.5, (nuevoPrecio.length || 1) + 2)}ch` }}
-              >
+              <div className="flex items-center gap-1 flex-shrink-0 rounded-input px-2 py-2" style={{ ...inputStyle, border: '0.5px solid var(--border)' }}>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="0"
                   value={nuevoPrecio}
-                  onChange={e => { if (e.target.value.length <= 8) setNuevoPrecio(e.target.value) }}
-                  className="w-full rounded-input px-3 py-2 text-body outline-none pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  style={inputStyle}
-                  onFocus={e => (e.target.style.borderColor = 'var(--color-brand)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+                  onChange={e => { if (e.target.value.length <= 7) setNuevoPrecio(e.target.value) }}
+                  className="outline-none bg-transparent text-body text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{
+                    color: 'var(--text-primary)',
+                    width: `${Math.max(2, nuevoPrecio.length || 1)}ch`,
+                    minWidth: '2ch',
+                    maxWidth: '7ch',
+                  }}
+                  onFocus={e => (e.parentElement!.style.borderColor = 'var(--color-brand)')}
+                  onBlur={e => (e.parentElement!.style.borderColor = 'var(--border)')}
                   onKeyDown={e => e.key === 'Enter' && agregarGasto()}
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-caption" style={{ color: 'var(--text-muted)' }}>€</span>
+                <span className="text-caption flex-shrink-0" style={{ color: 'var(--text-muted)' }}>€</span>
               </div>
               <button
                 onClick={agregarGasto}
@@ -239,8 +252,13 @@ export function Onboarding() {
           </>
         )}
 
+        {/* Error al guardar */}
+        {errorGuardado && (
+          <p className="text-caption mt-4" style={{ color: '#DC2626' }}>{errorGuardado}</p>
+        )}
+
         {/* Botones de navegación */}
-        <div className="flex gap-3 mt-8">
+        <div className="flex gap-3 mt-4">
           <button
             onClick={omitir}
             className="flex-1 rounded-btn py-[10px] text-body"
@@ -254,8 +272,8 @@ export function Onboarding() {
           </button>
           <button
             onClick={siguiente}
-            disabled={guardando}
-            className="flex-1 rounded-btn py-[10px] text-body font-medium text-white disabled:opacity-60"
+            disabled={guardando || (paso === 0 && (!datos.gasto_mensual_estimado || Number(datos.gasto_mensual_estimado) <= 0))}
+            className="flex-1 rounded-btn py-[10px] text-body font-medium text-white disabled:opacity-40"
             style={{ background: 'var(--color-brand)' }}
           >
             {guardando ? 'Guardando...' : esUltimoPaso ? 'Empezar →' : 'Siguiente →'}

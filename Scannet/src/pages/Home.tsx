@@ -105,7 +105,7 @@ export function Home() {
                 {totalCombinado.toFixed(0)}€
                 {' / '}
                 <span style={{ color: 'var(--text-muted)' }}>
-                  {limiteGasto.toFixed(0)}€
+                  {gastoEstimado.toFixed(0)}€
                 </span>
               </span>
             </div>
