@@ -166,7 +166,8 @@ export function useScan(): UseScanReturn {
    *  Acepta: DD/MM/YYYY, DD/MM/YYYY HH:mm:ss, YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss */
   function toISODate(fecha: string): string {
     const dateOnly = fecha.split('T')[0].split(' ')[0].trim()
-    const parts = dateOnly.split('/')
+    // Acepta DD/MM/YYYY y DD-MM-YYYY (con barras o guiones)
+    const parts = dateOnly.split(/[\/\-]/)
     if (parts.length === 3 && parts[0].length === 2) {
       return `${parts[2]}-${parts[1]}-${parts[0]}`
     }
