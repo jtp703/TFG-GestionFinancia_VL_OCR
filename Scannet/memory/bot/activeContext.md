@@ -1,5 +1,5 @@
 ---
-Última actualización: 2026-04-12
+Última actualización: 2026-04-16
 ---
 
 ## Estado actual de Scannet
@@ -9,7 +9,11 @@
 - Deploy: Vercel apunta a rama `Feature-App-Stack` como producción ✅
 - Fase 9 — QA y Deploy: **en curso**
 
-## Completado hoy (2026-04-12)
+## Completado hoy (2026-04-16)
+
+- Fix onboarding gastos fijos: el paso 3 ahora pide nombre + precio por cada gasto y los inserta en `gasto_fijo` (antes guardaba texto plano en `perfil_usuario.gastos_fijos` y nunca aparecían en el donut) ✅
+
+## Completado (2026-04-12)
 
 - `USE_MOCK = false` en `useTickets.ts` — donut ahora consulta Supabase real ✅
 - try/catch en `getSession()` de `useTickets.ts` — evita hook colgado con token inválido ✅
