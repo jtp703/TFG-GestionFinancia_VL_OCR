@@ -69,25 +69,33 @@ export function Onboarding() {
 
   /** Guarda el perfil y los gastos fijos en Supabase, luego redirige. */
   const guardarYSalir = async () => {
-    if (user) {
+    // Obtener uid desde sesión activa como fuente de verdad
+    const { data: { session } } = await supabase.auth.getSession()
+    const uid = session?.user?.id ?? user?.id
+
+    if (uid) {
       // Actualizar perfil financiero
-      await supabase.from('perfil_usuario').update({
+      const { error: profileError } = await supabase.from('perfil_usuario').update({
         gasto_mensual_estimado: datos.gasto_mensual_estimado ? Number(datos.gasto_mensual_estimado) : null,
         ahorro_deseado:         datos.ahorro_deseado         ? Number(datos.ahorro_deseado)         : null,
-      }).eq('id', user.id)
+      }).eq('id', uid)
+      if (profileError) console.error('[Onboarding] perfil_usuario update error:', profileError)
 
       // Insertar gastos fijos en la tabla gasto_fijo para que aparezcan en el donut
       if (gastosFijos.length > 0) {
-        await supabase.from('gasto_fijo').insert(
+        const { error: gastosError } = await supabase.from('gasto_fijo').insert(
           gastosFijos.map(g => ({
-            usuario_id: user.id,
-            nombre:     g.nombre,
-            precio:     parseFloat(g.precio),
-            emoji:      null,
+            usuario_id:   uid,
+            nombre:       g.nombre,
+            precio:       parseFloat(g.precio),
+            emoji:        null,
             categoria_id: null,
           }))
         )
+        if (gastosError) console.error('[Onboarding] gasto_fijo insert error:', gastosError)
       }
+    } else {
+      console.error('[Onboarding] guardarYSalir llamado sin sesión activa')
     }
     navigate('/')
   }

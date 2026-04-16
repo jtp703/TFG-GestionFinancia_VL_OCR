@@ -33,6 +33,26 @@ interface UseScanReturn {
   cancelar:      () => void
 }
 
+/** Redimensiona y comprime una imagen a máx 1200px y calidad 0.8 para no superar el límite de OCR.space (1MB). */
+async function comprimirImagen(blob: Blob, maxPx = 1200, quality = 0.82): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(blob)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale     = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const canvas    = document.createElement('canvas')
+      canvas.width    = Math.round(img.width  * scale)
+      canvas.height   = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob(result => resolve(result ?? blob), 'image/jpeg', quality)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob) }
+    img.src = url
+  })
+}
+
 export function useScan(): UseScanReturn {
   const [estado, setEstado]             = useState<Estado>('idle')
   const [resultado, setResultado]       = useState<ResultadoOCR | null>(null)
@@ -83,8 +103,11 @@ export function useScan(): UseScanReturn {
       return
     }
 
+    // Comprimir imagen (máx 1200px, calidad 0.82) antes de enviar — evita superar el límite de OCR.space
+    const blobComprimido = await comprimirImagen(imageBlob)
+
     // Convertir blob a base64 en chunks para evitar stack overflow con imágenes grandes
-    const arrayBuffer = await imageBlob.arrayBuffer()
+    const arrayBuffer = await blobComprimido.arrayBuffer()
     const bytes = new Uint8Array(arrayBuffer)
     let binary = ''
     const chunkSize = 8192
@@ -102,7 +125,7 @@ export function useScan(): UseScanReturn {
         },
         body: JSON.stringify({
           image:       base64,
-          mimeType:    imageBlob.type || 'image/jpeg',
+          mimeType:    'image/jpeg',   // siempre JPEG tras la compresión
           metodo_pago: metodoPago,
         }),
       })

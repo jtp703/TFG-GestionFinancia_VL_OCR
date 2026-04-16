@@ -38,7 +38,7 @@ export function useGastosFijos(): UseGastosFijosResult {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setLoading(false); return }
 
-    const [{ data: gastos }, { data: cats }] = await Promise.all([
+    const [{ data: gastos, error: gastosErr }, { data: cats }] = await Promise.all([
       supabase
         .from('gasto_fijo')
         .select('id, nombre, precio, emoji, categoria_id, activo, categoria:categoria_id(id, nombre)')
@@ -50,6 +50,7 @@ export function useGastosFijos(): UseGastosFijosResult {
         .select('id, nombre')
         .order('nombre'),
     ])
+    if (gastosErr) console.error('[useGastosFijos] cargar error:', gastosErr)
 
     const normalizado: GastoFijo[] = (gastos ?? []).map((g: any) => ({
       ...g,

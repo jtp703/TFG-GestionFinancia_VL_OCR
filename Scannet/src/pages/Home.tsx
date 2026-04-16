@@ -11,9 +11,9 @@ import type { TotalCategoria } from '@/hooks/useTickets'
 
 /** Vista principal de Gastos del mes en curso */
 export function Home() {
-  const { tickets, totalesPorCategoria, totalMes, loading, error } = useTickets()
-  const { perfil }                                                  = usePerfil()
-  const { gastosFijos, categorias, crear, actualizar, eliminar }   = useGastosFijos()
+  const { tickets, totalesPorCategoria, totalMes, loading, error }          = useTickets()
+  const { perfil }                                                            = usePerfil()
+  const { gastosFijos, categorias, crear, actualizar, eliminar, loading: loadingGastos } = useGastosFijos()
   const [catSeleccionada, setCatSeleccionada]                      = useState<string | null>(null)
   const [modalGastos, setModalGastos]                              = useState(false)
 
@@ -42,8 +42,9 @@ export function Home() {
   }, [gastosFijos])
 
   const categoriaActiva = catSeleccionada ? totalesCombinados[catSeleccionada] ?? null : null
-  const hayDatos        = !loading && !error && (tickets.length > 0 || gastosFijos.length > 0)
-  const sinDatos        = !loading && !error && tickets.length === 0 && gastosFijos.length === 0
+  const cargando        = loading || loadingGastos
+  const hayDatos        = !cargando && !error && (tickets.length > 0 || gastosFijos.length > 0)
+  const sinDatos        = !cargando && !error && tickets.length === 0 && gastosFijos.length === 0
 
   // Indicador de presupuesto con zona de ahorro
   const gastoEstimado  = perfil?.gasto_mensual_estimado ?? 0
@@ -66,7 +67,7 @@ export function Home() {
             Gastos de {new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
           </h1>
           {/* Barra de presupuesto con zona de ahorro */}
-          {gastoEstimado > 0 && !loading && (
+          {gastoEstimado > 0 && !cargando && (
             <div className="flex items-center gap-2 mt-1.5">
               {/* Barra */}
               <div className="relative w-28 h-2 rounded-full" style={{ background: 'var(--border)' }}>
@@ -121,7 +122,7 @@ export function Home() {
       </div>
 
       {/* Estado de carga */}
-      {loading && (
+      {cargando && (
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-brand)' }} />
         </div>
