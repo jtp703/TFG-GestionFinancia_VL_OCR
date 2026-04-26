@@ -14,7 +14,6 @@
 """
 
 import os
-import re
 import json
 import argparse
 import shutil
@@ -23,24 +22,9 @@ from pathlib import Path
 
 def load_original_jsonl(jsonl_path: str) -> list:
     """
-    Carga el JSONL original (con formato de JSON anidado sin escapar).
+    Carga el JSONL golden (formato V5): ground_truth como objeto JSON directo.
     """
-    entries = []
-    pattern = re.compile(
-        r'"image_path"\s*:\s*"([^"]+)"\s*,\s*"ground_truth"\s*:\s*"(\{.+\})"\s*\}'
-    )
-    with open(jsonl_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            match = pattern.search(line)
-            if match:
-                entries.append({
-                    'image_path': match.group(1),
-                    'ground_truth': match.group(2)
-                })
-    return entries
+    return load_standard_jsonl(jsonl_path)
 
 
 def load_standard_jsonl(jsonl_path: str) -> list:
@@ -68,18 +52,18 @@ def main():
     )
     parser.add_argument(
         '--original-jsonl',
-        default=str(Path(__file__).parent / 'imagenes' / 'dataset_espanol_ampliado.jsonl'),
-        help='JSONL original con los tickets reales (default: ./imagenes/dataset_espanol_ampliado.jsonl)'
+        default=str(Path(__file__).parent / 'imagenes' / 'dataset_golden.jsonl'),
+        help='JSONL golden con los tickets reales (default: ./imagenes/dataset_golden.jsonl)'
     )
     parser.add_argument(
         '--original-images',
-        default=str(Path(__file__).parent / 'imagenes'),
-        help='Directorio con las imágenes originales (default: ./imagenes)'
+        default=r'F:\datasetTickets\v3',
+        help='Directorio con las imágenes originales (default: F:\\datasetTickets\\v3)'
     )
     parser.add_argument(
         '--augmented-dir',
-        default=str(Path(__file__).parent / 'output_augmented'),
-        help='Directorio con imágenes aumentadas y su JSONL'
+        default=r'F:\datasetTickets\v3\output_augmented',
+        help='Directorio con imágenes aumentadas y su JSONL (default: F:\\datasetTickets\\v3\\output_augmented)'
     )
     parser.add_argument(
         '--synthetic-dir',
@@ -88,8 +72,8 @@ def main():
     )
     parser.add_argument(
         '--output', '-o',
-        default=str(Path(__file__).parent / 'dataset_final'),
-        help='Directorio de salida para el dataset fusionado'
+        default=r'F:\datasetTickets\dataset_final',
+        help='Directorio de salida para el dataset fusionado (default: F:\\datasetTickets\\dataset_final)'
     )
     parser.add_argument(
         '--copy-images',

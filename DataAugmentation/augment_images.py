@@ -16,7 +16,6 @@
 """
 
 import os
-import re
 import json
 import argparse
 import random
@@ -141,27 +140,19 @@ def load_jsonl(jsonl_path: str) -> dict:
     """
     Carga el archivo JSONL y devuelve un diccionario {image_path: ground_truth}.
 
-    El JSONL de este proyecto tiene un formato especial donde ground_truth
-    contiene JSON anidado SIN escapar las comillas internas, por ejemplo:
-      {"image_path": "x.jpg", "ground_truth": "{"comercio": "X", ...}"}
-    Se usa regex para extraer ambos campos de forma robusta.
+    Formato golden (V5): ground_truth es un objeto JSON directamente.
+      {"image_path": "x.jpg", "ground_truth": {"comercio": "X", ...}}
     """
     data = {}
-    # Patrón: captura image_path y todo el contenido entre las llaves de ground_truth
-    pattern = re.compile(
-        r'"image_path"\s*:\s*"([^"]+)"\s*,\s*"ground_truth"\s*:\s*"(\{.+\})"\s*\}'
-    )
     with open(jsonl_path, 'r', encoding='utf-8') as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:
                 continue
-            match = pattern.search(line)
-            if match:
-                image_path = match.group(1)
-                ground_truth = match.group(2)
-                data[image_path] = ground_truth
-            else:
+            try:
+                entry = json.loads(line)
+                data[entry['image_path']] = entry['ground_truth']
+            except (json.JSONDecodeError, KeyError):
                 print(f"  ⚠ No se pudo parsear línea {line_num}")
     return data
 
@@ -290,18 +281,18 @@ Ejemplos de uso:
     )
     parser.add_argument(
         '--input', '-i',
-        default=None,
-        help='Directorio con las imágenes originales (OBLIGATORIO). Ejemplo: DataAugmentation/imagenes'
+        default=r'F:\datasetTickets\v3',
+        help='Directorio con las imágenes originales (default: F:\\datasetTickets\\v3)'
     )
     parser.add_argument(
         '--output', '-o',
-        default=str(Path(__file__).parent / 'output_augmented'),
-        help='Directorio de salida para imágenes aumentadas (default: ./output_augmented)'
+        default=r'F:\datasetTickets\v3\output_augmented',
+        help='Directorio de salida para imágenes aumentadas (default: F:\\datasetTickets\\v3\\output_augmented)'
     )
     parser.add_argument(
         '--jsonl', '-j',
-        default=str(Path(__file__).parent / 'imagenes' / 'dataset_espanol_ampliado.jsonl'),
-        help='Ruta al archivo JSONL con las etiquetas (default: ./imagenes/dataset_espanol_ampliado.jsonl)'
+        default=str(Path(__file__).parent / 'imagenes' / 'dataset_golden.jsonl'),
+        help='Ruta al archivo JSONL con las etiquetas (default: ./imagenes/dataset_golden.jsonl)'
     )
     parser.add_argument(
         '--num-augments', '-n',
@@ -323,7 +314,7 @@ Ejemplos de uso:
 
     args = parser.parse_args()
     if args.input is None:
-        parser.error("--input es obligatorio. Ejemplo: DataAugmentation/imagenes")
+        parser.error("--input es obligatorio. Ejemplo: F:\\datasetTickets\\v3")
 
     # Fijar semilla si se proporcionó
     if args.seed is not None:
