@@ -1,57 +1,43 @@
 ---
-Última actualización: 2026-04-26 (sesión continua — H6 listo)
+Última actualización: 2026-04-27 — V5 cerrado como experimento académico
 ---
 
 ## Estado actual del modelo
 
-- V4 entrenado: `Lacax/deepseek_ocr_lora` en HF (loss 0.0399, val_loss no registrado)
-- Pipeline en producción Scannet: OCR.space + DeepSeek-chat
-- **Plataforma de pruebas individuales: Google Colab con GPU T4** (no RunPod) — vía `gradio_demo.py`
-- **Plataforma de entrenamiento V5: RunPod RTX 4090** (notebook V5 listo para deploy)
+- V5 entrenado: `Lacax/deepseek_ocr_lora_v5` en HF (eval_loss 0.1274, 6 épocas, 816 muestras)
+- V4 conservado: `Lacax/deepseek_ocr_lora` (no sobrescrito, comparativa académica)
+- **Pipeline en producción Scannet: OCR.space + DeepSeek-chat** (mantiene)
+- V5 NO se integra en Scannet — alucinación de items confirmada cualitativamente
 
-## Foco actual: H6.8 PENDIENTE (U) — lanzar entrenamiento V5
+## Foco actual: redacción de la conclusión del TFG
 
-### Completado en esta sesión (2026-04-26)
+El usuario está redactando el capítulo de la memoria del TFG sobre el experimento V5.
 
-- ✅ H1.1-H1.5: quick wins inferencia (Pruebas_de_inferencia.ipynb cells 3-4 + gradio_demo.py)
-- ✅ H2.1-H2.6: módulo `validators/` (arithmetic, nif_cif, dates, abbreviations, dedup, pipeline)
-- ✅ H3.1-H3.8: dataset_golden.jsonl (136 tickets, 55+ comercios) + upload a Lacax/Tickets (816 imágenes)
-- ✅ H4.1-H4.3: análisis de diversidad — sin gaps críticos, H5 NO necesario
-- ✅ H6.1-H6.7: notebook V5 creado en `Deepseek OCR/codigo/Deepseek_OCR_Runpod_Fix_V5.ipynb`
+### V5 — resumen del fallo
 
-### Notebook V5 — decisiones clave aplicadas
+- **Éxito técnico**: entrenamiento limpio, eval_loss monotónica 0.64 → 0.13
+- **Fallo de generalización**: en inferencia con tickets reales (`Dataset_inference/img2.jpeg`), modelo extrae cabecera (comercio/CIF/fecha) pero **alucina completamente items y total**
+- Causa: dataset 816 muy pequeño + resolución insuficiente para texto fino + eval_loss engañoso (val comparte distribución con train)
+- Detalle completo en `memory/bot/experiments.md` sección V5
 
-| Fix | Cambio | Justificación |
-|---|---|---|
-| V5-A/B | dataset_golden.jsonl (Gemini) + ground_truth como objeto | JSON estricto, fin del regex parser |
-| V5-C | lr 2e-4 → 1e-4 | Reduce memorización |
-| V5-D | dropout 0.05 → 0.1 | Regularización |
-| V5-E | r=32→16, alpha=64→32 | 172M → ~86M params entrenables |
-| V5-F | 3 → 6 epochs + EarlyStopping(patience=2) | Selección por val_loss |
-| V5-G | dynamic_preprocess siempre activo | Coincide con inferencia |
-| V5-H | Prompt único `INSTRUCTION` train↔infer | Sec. 8.3 respuesta_extendida.md |
-| V5-I | Schema con fecha_original, cantidad: number\|null | Coincide con anotación Gemini |
-| V5-J | Adapter → `Lacax/deepseek_ocr_lora_v5` (no sobrescribe V4) | Comparativa H7 |
-| V5-K | Split 85/15 (vs 90/10 V4) | Holdout interno mayor |
-| V5-L | Log explícito de val_loss por época | Gap crítico V4 |
+## Decisiones cerradas
 
-### PENDIENTE — por orden
+- **H7 omitido**: veredicto cualitativo via Gradio es definitivo. F1 cuantitativo no aporta
+- **H8 decidido**: pipeline OCR.space + DeepSeek-chat como producción. V5 → capítulo académico
+- No iterar a V6 sin condiciones más estrictas (ver decisions.md)
 
-**H6.8 (U) — siguiente acción**
-- [ ] Subir `Deepseek_OCR_Runpod_Fix_V5.ipynb` a RunPod
-- [ ] Configurar `HF_TOKEN` con permisos write
-- [ ] Ejecutar celdas A→J (reiniciar kernel tras B)
-- [ ] Verificar val_loss por época en Celda I
-- [ ] Confirmar adapter en HF: `Lacax/deepseek_ocr_lora_v5`
+## Pendientes inmediatos
 
-**H1.6 PENDIENTE (U)**: relanzar Test A (5 tickets) en Colab con gradio_demo.py — confirmar mejoras H1
+- [ ] Usuario redacta conclusión del capítulo V5 en la memoria del TFG
+- [ ] Cerrar `Documentacion/plan.md` marcando H6.8 ✅, H7 ❌ (omitido), H8 ✅ (decidido)
+- [ ] Append en `Documentacion/walkthrough.md` con la sesión 2026-04-27
 
-**H7 — Evaluación cuantitativa (post-H6.8)**
-- 30 tickets externos (no incluidos en los 136) que el usuario tiene aparte → anotar con Gemini para holdout
-- F1 por campo: V5 vs Pipeline vs V4
-- Decisión H8: integrar V5 si F1 ≥ Pipeline; si no, queda como experimento académico
+## Datos clave
 
-### Datos clave
+- Adapter V5: `Lacax/deepseek_ocr_lora_v5` (eval_loss 0.1274, no producible)
+- Adapter V4: `Lacax/deepseek_ocr_lora` (conservado para comparativa)
 - Dataset HF: `Lacax/Tickets` (privado, V5 golden, 816 imágenes)
-- Adapter base: `unsloth/DeepSeek-OCR-2`
-- Holdout externo: 30 tickets (en posesión del usuario, no anotados aún)
+- Notebook inferencia V5: `Deepseek OCR/codigo/Inferencia/Pruebas_de_inferencia_V5.ipynb` (creado 2026-04-27, incluye Gradio)
+- Notebook training V5 ejecutado: `Deepseek OCR/codigo/Deepseek_OCR_Runpod_Fix_V5_Ejecutado.ipynb`
+- Plantilla RunPod usada: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`
+- Stack ejecutado: torch 2.8.0+cu128, xformers 0.0.32.post2, transformers 4.56.2, unsloth 2026.4.8

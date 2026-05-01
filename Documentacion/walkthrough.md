@@ -150,3 +150,70 @@ Creado el notebook de entrenamiento V5 para RunPod RTX 4090: `Deepseek OCR/codig
 - **H6.8**: configurar `HF_TOKEN` con permisos write y lanzar entrenamiento en RunPod.
 - **H1.6**: relanzar Test A en Colab con `gradio_demo.py` (confirmar que las mejoras H1 no rompieron nada).
 - **H7 (post-H6.8)**: anotar con Gemini los 30 tickets externos (en posesión del usuario, no incluidos en los 136 ya anotados) → ejecutar V5 sobre ellos → F1 por campo vs Pipeline vs V4.
+
+---
+
+## 2026-04-27 — V5 entrenado, evaluado y cerrado como experimento académico
+
+### Qué se hizo
+
+**1. Despliegue V5 en RunPod** (notebook `Deepseek_OCR_Runpod_Fix_V5.ipynb`)
+
+Tras varios fallos de stack en cadena, plantilla final que funcionó: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` (torch 2.8.0 + CUDA 12.8.1 + Ubuntu 24.04). Celda B endurecida en pasadas sucesivas para resolver:
+
+- Driver host viejo (CUDA 12.7) vs torch cu128 → recreación con plantilla cu128
+- `torchvision::nms` ABI mismatch → pin a `torchvision==0.23.0` desde índice cu128
+- `bitsandbytes`, `trl`, `hf_transfer` faltantes (efecto secundario del `--no-deps` de unsloth)
+- Dependencias transitivas de unsloth 2026.4.x: `diffusers, protobuf, pydantic, sentencepiece, typer, tyro, wheel, xformers, cut_cross_entropy, msgspec, torchao`
+- Pin obligatorio: `datasets<4.4.0` y `trl<=0.24.0` (exigencias del propio unsloth)
+
+Celda C requirió workaround: pre-registrar `DeepseekOCR2Config → DeepseekOCR2ForCausalLM` en `AutoModel` antes de `FastVisionModel.from_pretrained` para que el lookup directo no caiga en la iteración rota del mapping (que cargaba lazy `PerceptionEncoder`, ausente en transformers 4.56.2). Se usa `type(config).model_type` (atributo de clase) en lugar del de la instancia para evitar `ValueError` por mismatch.
+
+**2. Resultados de entrenamiento**
+
+- Duración: 10244 s (~2h 50min) en RTX 4090
+- Train loss final: 0.3197 / val loss best: 0.1274 (epoch 6, step 522)
+- Curva eval_loss monotónica: 0.6439 → 0.3390 → 0.2023 → 0.1482 → 0.1298 → 0.1274
+- LoRA cubrió las 24 capas, 86.3M params entrenables (2.48%)
+- Adapter subido a `Lacax/deepseek_ocr_lora_v5` (V4 conservado en `Lacax/deepseek_ocr_lora`)
+
+**3. Notebook de inferencia V5** (`Deepseek OCR/codigo/Inferencia/Pruebas_de_inferencia_V5.ipynb`)
+
+Notebook nuevo (V4 original conservado) con:
+- Adapter apuntando a `Lacax/deepseek_ocr_lora_v5`
+- `INSTRUCTION` idéntico al training V5 (con `fecha_original` y `cantidad: number|null`)
+- Sin `FastVisionModel.for_inference` (problemático con deepseek_vl_v2)
+- Celdas: setup, inspect adapter, load model, utilidades compartidas, test rápido 1 ticket, tests A-E, **demo Gradio con `share=True`**
+
+**4. Evaluación cualitativa via Gradio**
+
+Probado con `Dataset_inference/img2.jpeg` (ticket Mercadona real, foto de mano sobre bolsa de papel, total 44.97 €):
+
+- ✅ Cabecera correcta: `comercio="MERCADONA, S.A."`, `cif="A46103834"`, `fecha="2025-12-23"`
+- ❌ Total: predice 39.94 €, real 44.97 €
+- ❌ Items: **inventados completamente**. Modelo genera "HIGIENICO DOBLE ROLL", "ICE TEA LIMÓN", "VELAS TE CHAI", "BOLSA PLASTICO" — productos plausibles para Mercadona pero ausentes en el ticket. Los items reales (HARINAMAIZ, MAYONESA, HIELO CUBITO, PECHUGA FAMILIAR, GUACAMOLE, PIÑA PELADA, MASA HOJALDRE, etc.) no aparecen en la salida
+
+Confirmado en otros tickets vía Gradio: el modelo nunca lee items reales.
+
+**5. Decisión: cerrar V5 como experimento académico**
+
+- H7 cuantitativo (F1 sobre 30 tickets) **omitido**: veredicto cualitativo definitivo
+- H8 decidido: **pipeline OCR.space + DeepSeek-chat se mantiene en producción**, V5 NO se integra
+- V5 queda como capítulo del TFG con lecciones aprendidas
+
+### Decisiones tomadas
+
+- **eval_loss puede ser engañoso** cuando train↔val comparten distribución: V5 alcanzó 0.13 sin generalizar realmente. Para futuros experimentos, validar con holdout EXTERNO desde el inicio
+- **86M params LoRA + 816 muestras + base_size 1024** insuficientes para OCR de texto fino. Cabecera con tipografía grande sobrevive; items con tipografía pequeña no
+- Documentar V5 en la memoria del TFG resaltando el aprendizaje, no como fracaso
+
+### Cómo verificar
+
+1. Notebook ejecutado: `Deepseek OCR/codigo/Deepseek_OCR_Runpod_Fix_V5_Ejecutado.ipynb` — revisar outputs Celda I (eval_loss por época) y Celda J (push HF OK)
+2. Adapter en HF: `https://huggingface.co/Lacax/deepseek_ocr_lora_v5` — debe contener `adapter_config.json` + `adapter_model.safetensors`
+3. Reproducir alucinación: cargar el notebook V5 de inferencia en Colab → celda 6 (Gradio) → subir cualquier ticket Mercadona nuevo → comparar items extraídos vs ticket real
+4. Estado de memoria: `memory/bot/experiments.md` (sección V5), `memory/bot/decisions.md` (V5 cerrado), `memory/bot/activeContext.md` (foco actual: redacción TFG)
+
+### Pendiente del usuario
+
+- Redactar capítulo V5 en la memoria del TFG (no requiere más experimentos del modelo)

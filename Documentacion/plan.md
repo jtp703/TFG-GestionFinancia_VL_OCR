@@ -127,30 +127,38 @@ El `ground_truth` es ahora un **objeto JSON**, no un string. Rompe con el format
 | 6.+ | Bonus V5: `dynamic_preprocess` siempre activo (sin guard ≤768)      | C ✅            | Celda G — `min_num=1, max_num=6, use_thumbnail=False`       |
 | 6.+ | Bonus V5: prompt único `INSTRUCTION` train↔inferencia               | C ✅            | Celda E — constante reutilizable                            |
 | 6.+ | Bonus V5: split 85/15 (vs V4 90/10) — holdout interno mayor         | C ✅            | Celda E — `test_size=0.15`                                  |
-| 6.8 | Lanzar entrenamiento V5 en RunPod                                   | **U pendiente** | Modelo → `Lacax/deepseek_ocr_lora_v5`                       |
+| 6.8 | Lanzar entrenamiento V5 en RunPod                                   | **U** ✅        | Modelo → `Lacax/deepseek_ocr_lora_v5` (2026-04-27, eval_loss 0.1274) |
 
-**Criterio de cierre:** V5 entrenado con val_loss por época visible.
-
----
-
-## H7 — Evaluación cuantitativa V5 vs Pipeline
-
-| #   | Acción                                                      | Quién | Verificación                            |
-| --- | ----------------------------------------------------------- | ----- | --------------------------------------- |
-| 7.1 | Reservar holdout de 30 tickets no vistos en training        | C     | Carpeta `holdout/` + JSONL ground truth |
-| 7.2 | Script `evaluate.py`: F1 por campo                          | C     | Métricas reproducibles                  |
-| 7.3 | Inferencia V5 sobre holdout                                 | **U** | Outputs JSON                            |
-| 7.4 | Inferencia pipeline OCR.space + DeepSeek-chat sobre holdout | **U** | Outputs JSON                            |
-| 7.5 | Comparativa V5 vs Pipeline vs V4 (tabla F1)                 | C     | Reporte final                           |
-
-**Criterio de cierre:** tabla F1 de los 3 enfoques.
+**Criterio de cierre:** ✅ V5 entrenado con val_loss por época visible (0.6439 → 0.1274 en 6 épocas).
 
 ---
 
-## H8 — Decisión estratégica
+## H7 — Evaluación cuantitativa V5 vs Pipeline ❌ OMITIDO (2026-04-27)
 
-- Si V5 ≥ Pipeline → integrar V5 en Scannet (resolver Issue 6 RunPod o explorar alternativas).
-- Si V5 < Pipeline → pipeline sigue en producción; V5 queda como experimento académico en la memoria del TFG.
+**Decisión:** veredicto cualitativo via Gradio sobre tickets reales (incluido `Dataset_inference/img2.jpeg`)
+es definitivo — V5 alucina items y total en cualquier ticket nuevo. F1 sobre 30 holdout solo añadiría
+decimales sin cambiar la conclusión.
+
+| #   | Acción                                                      | Estado     |
+| --- | ----------------------------------------------------------- | ---------- |
+| 7.1 | Reservar holdout de 30 tickets                              | ❌ omitido |
+| 7.2 | Script `evaluate.py`                                        | ❌ omitido |
+| 7.3 | Inferencia V5 sobre holdout                                 | ❌ omitido |
+| 7.4 | Inferencia pipeline sobre holdout                           | ❌ omitido |
+| 7.5 | Tabla comparativa F1                                        | ❌ omitido |
+
+---
+
+## H8 — Decisión estratégica ✅ (2026-04-27)
+
+- **V5 NO se integra en Scannet** — alucinación de items confirmada cualitativamente.
+- **Pipeline OCR.space + DeepSeek-chat se mantiene en producción.**
+- V5 queda documentado en la memoria del TFG como capítulo académico:
+  experimento de fine-tuning de VLM con dataset pequeño, lecciones aprendidas sobre
+  capacidad del modelo base, límites de eval_loss como métrica, y necesidad de
+  holdout externo desde el inicio.
+
+Resultado V5 detallado en `memory/bot/experiments.md` y `memory/bot/decisions.md`.
 
 ---
 

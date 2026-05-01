@@ -35,3 +35,12 @@
 - LoRA adapter: `Lacax/deepseek_ocr_lora` (repo privado, requiere HF_TOKEN)
 - Inferencia usa `DeepSeekOCR2DataCollator` con images, images_seq_mask, images_spatial_crop explícitos
 - NO usar `apply_chat_template` — el modelo requiere el collator custom
+
+## V5 cerrado como experimento académico (2026-04-27)
+
+- V5 entrenado con éxito técnico (eval_loss 0.1274) pero **alucina items en inferencia**
+- Cabecera (comercio/CIF/fecha) OK; items+total inventados a partir de patrones de training
+- H7 cuantitativo formal omitido — veredicto cualitativo definitivo via Gradio
+- **Decisión arquitectónica firme**: pipeline OCR.space + DeepSeek-chat se mantiene como sistema de producción Scannet. V5 NO se integra
+- V5 documentado como capítulo del TFG (lecciones aprendidas sobre fine-tuning de VLMs con datasets pequeños)
+- No iterar a V6 sin: (a) holdout externo desde el inicio, (b) dataset >> 816, (c) arquitectura específica OCR (Donut/TrOCR) o resolución mucho mayor
