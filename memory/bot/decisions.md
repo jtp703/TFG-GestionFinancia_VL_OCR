@@ -44,3 +44,20 @@
 - **Decisión arquitectónica firme**: pipeline OCR.space + DeepSeek-chat se mantiene como sistema de producción Scannet. V5 NO se integra
 - V5 documentado como capítulo del TFG (lecciones aprendidas sobre fine-tuning de VLMs con datasets pequeños)
 - No iterar a V6 sin: (a) holdout externo desde el inicio, (b) dataset >> 816, (c) arquitectura específica OCR (Donut/TrOCR) o resolución mucho mayor
+
+## V6 H1 — Stack Florence-2 en Colab T4 (2026-05-01)
+
+- Tarea elegida: **tag custom `<EXTRACT_TOTAL>`** (descartado `<OCR_WITH_REGION>` por output largo y gradiente diluido sobre el campo target).
+- Hosting dataset: repo NUEVO **`Lacax/Tickets-total`** (privado). NO se modifica `Lacax/Tickets` (V5) ni se borra contenido del Hub.
+- Stack Colab elegido **desde cero** (no extrapolar de V5):
+  - `transformers>=4.41,<4.46` — el rango compatible con `trust_remote_code` de Florence-2 (>=4.46 cambió API multimodal y rompe el modeling del repo Microsoft)
+  - `accelerate>=0.30`, `peft>=0.11` (LoRA solo si OOM en H3), `einops>=0.8`, `timm>=0.9` (DaViT backbone), `datasets>=2.19`
+  - **NO Unsloth** (el repo Florence-2 no es soportado y rompió V5 con DeepseekOCR2)
+  - **NO flash-attn** (T4 compute 7.5 no lo soporta; cae a SDPA y funciona)
+  - **fp16** (bf16 no eficiente en T4)
+- NO reinstalar torch en Colab — la imagen base trae uno compatible con CUDA 12 y T4. Reinstalar dispara cold start de >10 min.
+
+## V6 dataset_total split (2026-05-01)
+
+- Split estratificado por cuartiles del total (130 entradas tras H0 manual): 104 train / 12 val / 14 test, `random_state=42`.
+- Estratificación necesaria porque el rango de totales es muy ancho (0.53 € → 394.80 €); split aleatorio puro sesgaría test hacia tickets pequeños.

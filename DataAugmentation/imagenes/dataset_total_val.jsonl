@@ -1,0 +1,12 @@
+{"image_path": "recibo_almeria_114.jpg", "total": 19.55, "bbox": [926, 1121, 1059, 1216], "strategy": "manual: 2 clicks"}
+{"image_path": "recibo_almeria_069.jpg", "total": 215.8, "bbox": [729, 1313, 845, 1343], "strategy": "strict score=2.80 | strict (TOTAL_kw=True, h_ratio=1.16)"}
+{"image_path": "recibo_almeria_012.jpg", "total": 3.63, "bbox": [1027, 929, 1098, 971], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_121.jpg", "total": 3.2, "bbox": [642, 1002, 712, 1042], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_047.jpg", "total": 11.58, "bbox": [826, 742, 921, 802], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_091.jpg", "total": 178.0, "bbox": [765, 1033, 895, 1070], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_152.jpg", "total": 35.99, "bbox": [570, 893, 673, 922], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_142.jpg", "total": 73.47, "bbox": [500, 728, 544, 784], "strategy": "strict score=0.49 | strict (TOTAL_kw=False, h_ratio=0.97)"}
+{"image_path": "recibo_almeria_036.jpg", "total": 27.07, "bbox": [684, 1188, 733, 1209], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_154.jpg", "total": 6.0, "bbox": [544, 1019, 632, 1047], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_044.jpg", "total": 39.99, "bbox": [726, 714, 784, 758], "strategy": "relax-1: sin €, decimal+sin-excluidos"}
+{"image_path": "recibo_almeria_066.jpg", "total": 15.48, "bbox": [670, 737, 705, 753], "strategy": "strict score=0.59 | strict (TOTAL_kw=False, h_ratio=0.84)"}

@@ -1,43 +1,55 @@
 ---
-Última actualización: 2026-04-27 — V5 cerrado como experimento académico
+Última actualización: 2026-05-01 — V6 H1 ejecutado OK; pausa antes de H2
 ---
 
 ## Estado actual del modelo
 
-- V5 entrenado: `Lacax/deepseek_ocr_lora_v5` en HF (eval_loss 0.1274, 6 épocas, 816 muestras)
-- V4 conservado: `Lacax/deepseek_ocr_lora` (no sobrescrito, comparativa académica)
-- **Pipeline en producción Scannet: OCR.space + DeepSeek-chat** (mantiene)
-- V5 NO se integra en Scannet — alucinación de items confirmada cualitativamente
+- **V6 H1 ✅ ejecutado en Colab T4 sin problemas**. Notebook `Deepseek OCR/codigo/V6_Florence2_Total.ipynb` corrió de A a H sin OOM. Florence-2-base cargado, dataset `Lacax/Tickets-total` accesible, tag `<EXTRACT_TOTAL>` añadido, smoke test zero-shot ejecutado.
+- V5 cerrado: `Lacax/deepseek_ocr_lora_v5` (eval_loss 0.1274, alucinación de items confirmada)
+- V4 conservado: `Lacax/deepseek_ocr_lora`
+- Pipeline producción Scannet: OCR.space + DeepSeek-chat (sin cambios)
 
-## Foco actual: redacción de la conclusión del TFG
+## Foco siguiente: H2 — Formato target + DataCollator
 
-El usuario está redactando el capítulo de la memoria del TFG sobre el experimento V5.
+Sesión pausada. Al retomar:
 
-### V5 — resumen del fallo
+1. Leer este archivo + `memory/bot/decisions.md` (V6 H1) + `Documentacion/plan_v6.md` § H2.
+2. Diseñar formato del target Florence-2:
+   - Input: `pixel_values` + `input_ids = <EXTRACT_TOTAL>`
+   - Label: `total<loc_x1><loc_y1><loc_x2><loc_y2>` (los `<loc_*>` son tokens nativos de Florence-2 para bbox, ya en su vocab)
+   - Normalizar bbox a 0–999 sobre la imagen redimensionada por el processor (768×768 default)
+3. Implementar `DataCollator` en una nueva celda del notebook (o módulo `.py` separado):
+   - Recibe batch de `{image_path, total, bbox}`
+   - Llama `processor(text=prompt, images=img, return_tensors='pt')` → `pixel_values`, `input_ids`
+   - Tokeniza target → `labels` (mask `-100` en los input_ids)
+4. Verificar con `next(iter(DataLoader))` que las shapes son las esperadas y que `labels` se decodifica al string original.
 
-- **Éxito técnico**: entrenamiento limpio, eval_loss monotónica 0.64 → 0.13
-- **Fallo de generalización**: en inferencia con tickets reales (`Dataset_inference/img2.jpeg`), modelo extrae cabecera (comercio/CIF/fecha) pero **alucina completamente items y total**
-- Causa: dataset 816 muy pequeño + resolución insuficiente para texto fino + eval_loss engañoso (val comparte distribución con train)
-- Detalle completo en `memory/bot/experiments.md` sección V5
+## V6 — H1 (ejecutado)
 
-## Decisiones cerradas
+- 8 celdas A→H, sin entrenamiento.
+- Stack T4: `transformers>=4.41,<4.46`, fp16, sin Unsloth, sin flash-attn.
+- Tag custom `<EXTRACT_TOTAL>` añadido y resize_token_embeddings hecho.
+- Dataset HF `Lacax/Tickets-total` (privado): 130 imgs en `original/` + 130 en `etiquetadas/` (verificación visual; NO se usa en training) + 3 JSONL splits (104/12/14).
+- Vista lado a lado (original vs etiquetada) en celda F como sanity check del GT.
 
-- **H7 omitido**: veredicto cualitativo via Gradio es definitivo. F1 cuantitativo no aporta
-- **H8 decidido**: pipeline OCR.space + DeepSeek-chat como producción. V5 → capítulo académico
-- No iterar a V6 sin condiciones más estrictas (ver decisions.md)
+## V6 — Hiperparámetros tentativos H3 (no confirmados)
 
-## Pendientes inmediatos
+- batch=1, grad_accum=4, gradient_checkpointing, fp16
+- lr=1e-5, 10 épocas + EarlyStopping
+- Full fine-tune primero, fallback LoRA r=16 si OOM
+- Checkpoints a `/content/drive/MyDrive/TFG/V6_checkpoints` cada época
 
-- [ ] Usuario redacta conclusión del capítulo V5 en la memoria del TFG
-- [ ] Cerrar `Documentacion/plan.md` marcando H6.8 ✅, H7 ❌ (omitido), H8 ✅ (decidido)
-- [ ] Append en `Documentacion/walkthrough.md` con la sesión 2026-04-27
+## Restricciones técnicas V6 (no cuestionar sin motivo)
+
+- Plataforma: **Google Colab Tier gratuito**, NO RunPod
+- VRAM 16 GB T4 → fp16 obligatorio (bf16 no nativo en compute 7.5)
+- Sesiones cortadas a 12h → checkpoints a Drive obligatorios
+- Stack Colab: `transformers>=4.41,<4.46`, sin Unsloth, sin flash-attn
 
 ## Datos clave
 
-- Adapter V5: `Lacax/deepseek_ocr_lora_v5` (eval_loss 0.1274, no producible)
-- Adapter V4: `Lacax/deepseek_ocr_lora` (conservado para comparativa)
-- Dataset HF: `Lacax/Tickets` (privado, V5 golden, 816 imágenes)
-- Notebook inferencia V5: `Deepseek OCR/codigo/Inferencia/Pruebas_de_inferencia_V5.ipynb` (creado 2026-04-27, incluye Gradio)
-- Notebook training V5 ejecutado: `Deepseek OCR/codigo/Deepseek_OCR_Runpod_Fix_V5_Ejecutado.ipynb`
-- Plantilla RunPod usada: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`
-- Stack ejecutado: torch 2.8.0+cu128, xformers 0.0.32.post2, transformers 4.56.2, unsloth 2026.4.8
+- Plan V6: `Documentacion/plan_v6.md`
+- Walkthrough: `Documentacion/walkthrough.md` (append al final)
+- Notebook: `Deepseek OCR/codigo/V6_Florence2_Total.ipynb`
+- Scripts H0/H1: `DataAugmentation/{build_total_dataset,relabel_total,retry_no_match,split_dataset_total,upload_to_hf_total}.py`
+- Repo HF V6: `Lacax/Tickets-total` (privado, ya subido)

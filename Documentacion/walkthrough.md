@@ -217,3 +217,103 @@ Confirmado en otros tickets vía Gradio: el modelo nunca lee items reales.
 ### Pendiente del usuario
 
 - Redactar capítulo V5 en la memoria del TFG (no requiere más experimentos del modelo)
+
+---
+
+## 2026-05-01 — V6 abierto: Florence-2 para extracción autónoma del total (H0 en curso)
+
+### Qué se hizo
+
+- Decisión de abrir V6 como capítulo académico adicional: extraer **solo `total`** con un modelo autosuficiente, OCR.space queda como validador
+- Comparativa explícita Donut vs Florence-2 vs PaliGemma 2:
+  - PaliGemma 2 3B descartado: VRAM al límite en T4 + sesión Colab corta a 12h
+  - Donut descartado: pre-train 2022 sin bbox nativo
+  - **Florence-2-base elegido**: pre-train multi-tarea 2024 + bbox nativo (`<OCR_WITH_REGION>`) que encaja con la validación cruzada
+- Plan V6 escrito en `Documentacion/plan_v6.md` (hitos H0–H6)
+- Script `DataAugmentation/build_total_dataset.py` creado para H0:
+  - Lee `dataset_golden.jsonl`, llama OCR.space con `isOverlayRequired=true`
+  - Pseudo-labels de bbox por matching del total contra palabras del overlay
+  - Heurística por banda Y (OCR.space agrupa mal por proximidad horizontal)
+  - Args `--limit`, `--offset`, `--append`, `--dump-ocr` para iteración manual
+  - Imágenes etiquetadas en `F:/datasetTickets/dataset_final/etiquetadas/` para revisión visual
+- Probado en 2 imágenes:
+  - ✅ recibo_almeria_004 (Correos): bbox correcto en `36,70` de "TOTAL COMPRA €"
+  - ⚠ recibo_almeria_005 (Mercadona): bbox cae en `Importe: 23,45 €` (línea inferior) en vez de `TOTAL (€) 23,45` — pendiente reforzar matcher
+
+### Decisiones tomadas
+
+- V6 NO entra en producción Scannet — solo capítulo TFG
+- Plataforma fija: **Google Colab Tier gratuito (T4 16 GB)**, OOM como restricción crítica
+- Dataset: 136 reales del golden, sin augmentation (target reducido + augmentation arriesga overfitting)
+- Validación cruzada con OCR.space sobre el **crop del bbox**, no sobre el ticket entero
+- Holdout externo obligatorio en H4 (lección de V5)
+- Refuerzo del matcher acordado con el usuario:
+  - HARD: el texto debe ser decimal con 2 dígitos (`X,XX` o `X.XX`)
+  - HARD: la banda Y debe contener el símbolo `€`
+  - SOFT: keyword `TOTAL`/`IMPORTE` → +score
+  - SOFT: altura del texto → score proporcional (proxy de negrita/destacado)
+
+### Cómo verificar
+
+1. Ejecutar `python DataAugmentation/build_total_dataset.py --limit 1` y revisar `F:/datasetTickets/dataset_final/etiquetadas/recibo_almeria_004.jpg` — el bbox rojo debe rodear el total
+2. Ejecutar `--offset 1 --limit 1 --append` y revisar `recibo_almeria_005.jpg` (en curso, fallando hasta refinar matcher)
+3. Plan V6 en `Documentacion/plan_v6.md`
+4. Estado en `memory/bot/activeContext.md` (V6 H0 en curso)
+
+### Pendiente
+
+- Reforzar `find_total_bbox` con las condiciones acordadas
+- Validar imagen 2 → escalar a `--limit 10` → 136 completas → revisión manual
+- Split 80/10/10 + subida a HF `Lacax/Tickets-total`
+- H1: notebook Colab Florence-2
+
+---
+
+## 2026-05-01 (continuación) — H0 cierre + H1 código listo
+
+### Qué se hizo
+
+**Cierre H0 — dataset_total.jsonl con bbox**:
+- Reforzado `find_total_bbox` en `DataAugmentation/build_total_dataset.py` con condiciones HARD (decimal X,XX + presencia de € en banda Y, exclusión IVA/BASE/SUBTOTAL) y SOFT (keyword TOTAL +2.0, altura del texto como proxy de negrita, ligera penalización por Y bajo). Validado primero en `recibo_almeria_005` (Mercadona) con score strict 3.50.
+- Lotes de 10 hasta cubrir 136 imágenes. Resultados: 14 con bbox mal posicionado, 8 sin match en OCR.
+- Creado `DataAugmentation/retry_no_match.py` — segundo intento OCR.space (bug fix: `zfill(3)` para IDs numéricos cortos). Recuperó 1/8 (recibo_almeria_070).
+- Creado `DataAugmentation/relabel_total.py` — re-etiquetado manual con matplotlib `ginput(2)`: 2 clics (top-left + bottom-right), reescribe bbox y regenera imagen etiquetada. Aplicado a las 21 imágenes problemáticas.
+- Estado final: **130 entradas con bbox válido en `dataset_total.jsonl`** (6 descartadas).
+
+**H1 — Código listo (ejecución manual pendiente)**:
+- Decisión arquitectónica: tarea = tag custom `<EXTRACT_TOTAL>` (no `<OCR_WITH_REGION>`). Razón: output corto (~10 tokens), pérdida concentrada en el campo target, viable en T4 16 GB.
+- Decisión hosting: repo nuevo `Lacax/Tickets-total` (privado). NO se modifica `Lacax/Tickets` (V5).
+- Decisión stack: dependencias elegidas desde cero según requisitos de Florence-2 + T4, NO extrapoladas de V5 (que usaba Unsloth + transformers 4.56.2 incompatibles con Florence-2).
+- Creado `DataAugmentation/split_dataset_total.py` — split 80/10/10 estratificado por cuartil del total (104/12/14, seed=42). Distribución por bin equilibrada entre splits.
+- Creado `DataAugmentation/upload_to_hf_total.py` — staging temporal con JSONLs en raíz + imágenes referenciadas en `original/`. Sin `--clean`, no borra contenido del Hub.
+- Creado `Deepseek OCR/codigo/V6_Florence2_Total.ipynb` — 8 celdas: GPU check, install (`transformers>=4.41,<4.46` + accelerate/peft/einops/timm/datasets), mount Drive, login HF, carga Florence-2-base fp16, load_dataset, add tag, smoke test zero-shot.
+
+### Cómo verificar
+
+```powershell
+# 1. Splits estratificados (ya generados)
+python DataAugmentation/split_dataset_total.py
+# Salida esperada: 104/12/14 con histograma equilibrado por cuartil
+
+# 2. Subir dataset a HF (necesita HF_TOKEN write)
+python DataAugmentation/upload_to_hf_total.py --token $env:HF_TOKEN
+
+# 3. Subir el notebook a Colab, crear secret HF_TOKEN, "Run all" celdas A→H.
+# Criterios H1:
+#   - Celda E: params≈230M, fp16 VRAM≈X GB
+#   - Celda G: <EXTRACT_TOTAL> tokenized to 1 id único
+#   - Celda H: generate() sin OOM, pico VRAM < 12 GB
+```
+
+### Pendiente
+
+- Ejecutar `upload_to_hf_total.py` (manual, requiere token write)
+- Run-all del notebook en Colab T4 limpio
+- Si todo verde → H2: DataCollator que mapee `{image,total,bbox}` a `pixel_values + input_ids=tag + labels=total<loc_x1><loc_y1><loc_x2><loc_y2>`
+
+### Cierre H1 (2026-05-01)
+
+- Subida HF ejecutada: `upload_to_hf_total.py` ampliado para subir también `etiquetadas/` al repo (verificación visual; NO se usa en training).
+- Celda F del notebook ajustada: `load_image(name, labeled=False|True)` y vista lado a lado original vs etiquetada del primer ejemplo de val como sanity check del GT.
+- Notebook ejecutado en Colab T4 sin problemas: A→H sin OOM, smoke test zero-shot OK.
+- Sesión V6 pausada. Próximo retomar: H2 (formato target + DataCollator).
