@@ -76,3 +76,56 @@ Fix aplicado en scan.ts: normalización unicode ，→, ：→: antes de JSON.pa
 - Validar siempre con holdout **externo** antes de confiar en eval_loss
 - Para OCR de texto fino, considerar arquitecturas especializadas (Donut, TrOCR) o aumentar drásticamente resolución del crop
 - Anotación con Gemini garantiza JSON válido pero no resuelve el problema de capacidad del modelo base
+
+## V6 (2026-05-02) — H3 entrenado
+
+- Modelo: `microsoft/Florence-2-base` (~230M params, encoder-decoder DaViT + BART)
+- Dataset: `Lacax/Tickets-total` (130 entradas, split 104 train / 12 val / 14 test estratificado por cuartil del total)
+- Plataforma: Google Colab T4 (16 GB VRAM)
+- Tarea: tag custom `<EXTRACT_TOTAL>` → target `{total:.2f}<loc_x1><loc_y1><loc_x2><loc_y2>`
+- Hiperparámetros: full FT, fp32 weights + Trainer fp16=True, bs=1, grad_accum=4, lr=1e-5 cosine, warmup 0.1, gradient_checkpointing, 10 ép. + EarlyStopping(patience=2)
+- Resultado: stop ép. 5/10, mejor en **ép. 3** con `eval_loss=1.3980`. VRAM pico 6.44 GB. Runtime 477 s (~8 min).
+- Pérdidas por época (train | eval): 2.72|1.57 → 1.29|1.45 → 0.90|**1.40** → 0.67|1.44 → 0.45|1.51
+
+### Sanity check post-train (3 imgs val, generación deterministic greedy)
+
+| img | total GT | total pred | bbox |
+|-----|----------|-----------|------|
+| recibo_almeria_114 | 19.55 | 19.55 ✅ | desviación 8-12 px (~1 %) ✅ |
+| recibo_almeria_121 | 3.20  | 3.20  ✅ | desviación 0-3 px ✅ |
+| recibo_almeria_142 | 73.47 | 5.4   ❌ | esquina sup. derecha vs centro-izq ❌ |
+
+- Hipótesis del fallo en `recibo_almeria_142`: **ticket girado**. Florence-2 base no es invariante a rotación con un train de solo 104 imgs.
+- Bug benigno: warning de missing keys (`embed_tokens.weight`, `lm_head.weight`) al recargar best — safetensors deduplica tied weights. Resuelto con `model.tie_weights()` post-load.
+
+### Lecciones tempranas (pre-H4)
+
+- Para una hipotética V6.1: augmentation con rotaciones ±15° (rotando bbox también) en train; el holdout no se toca.
+- En inferencia: deskew con OpenCV (función `preprocess_ticket` ya existe en V5) antes de pasar al modelo.
+- VRAM 6.44 GB en full FT abre la puerta a aumentar `batch` o pasar a `Florence-2-large` en una iteración futura sin LoRA.
+
+### H4 — eval cuantitativo holdout (14 imgs test, 2026-05-02)
+
+| Métrica | Valor |
+|---------|-------|
+| n_test | 14 |
+| malformed | 0 (0.0 %) |
+| total exact | 12 (85.7 %) |
+| total ±0.01 € | 12 (85.7 %) |
+| IoU media | 0.590 |
+| IoU ≥ 0.5 | 10 (71.4 %) |
+| IoU ≥ 0.7 | 9 (64.3 %) |
+
+**Diagnóstico de los 5 fallos**:
+
+- `recibo_almeria_020`: error real de OCR (`32.13` → `52.13`, confunde dígito `3↔5`).
+- `recibo_almeria_139`: total mal cerrado (`17.17.7`); el regex salva `17.7` pero el output del modelo está mal.
+- `recibo_almeria_009 / 103 / 062`: total **correcto** + IoU=0. El bbox del modelo apunta a una **instancia distinta del mismo número** en el ticket (subtotal/total/IVA repiten el valor). H0 (OCR.space + matcher) eligió una; el modelo aprendió otra. Ambos bboxes son válidos para el campo `total`. La métrica IoU contra un único GT está sesgada cuando hay múltiples apariciones.
+
+**Lectura honesta**:
+
+- Métrica principal del campo: `total ±0.01 = 85.7 %` con `0 mal-formados`.
+- Métrica bbox condicional: 9/14 IoU≥0.7 cuando solo hay una aparición del total.
+- Test OOD (img.png subida por el usuario): el modelo localiza correctamente la zona del total en un ticket fuera del dataset → generalización aparente, no solo memorización.
+
+**Para una hipotética V6.1**: anotar todas las apariciones del total en H0 y evaluar IoU contra el mejor match del conjunto.

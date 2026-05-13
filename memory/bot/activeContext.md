@@ -1,28 +1,45 @@
 ---
-Última actualización: 2026-05-01 — V6 H1 ejecutado OK; pausa antes de H2
+Última actualización: 2026-05-02 — V6 H4 cerrado (total±0.01 85.7 % en holdout); siguiente foco H5 (Gradio + OCR.space cross-check)
 ---
 
 ## Estado actual del modelo
 
-- **V6 H1 ✅ ejecutado en Colab T4 sin problemas**. Notebook `Deepseek OCR/codigo/V6_Florence2_Total.ipynb` corrió de A a H sin OOM. Florence-2-base cargado, dataset `Lacax/Tickets-total` accesible, tag `<EXTRACT_TOTAL>` añadido, smoke test zero-shot ejecutado.
+- **V6 H4 ✅ ejecutado**. Holdout 14 imgs test: `total ±0.01 = 85.7 %`, `malformed = 0`, `IoU≥0.7 = 64.3 %`, IoU media 0.59. 3 fallos de IoU son falsos negativos (instancia repetida del total). Test OOD con imagen propia del usuario: localiza la zona del total correctamente.
+- V6 H3 ✅ Full FT, mejor época 3, eval_loss 1.3980, VRAM pico 6.44 GB. Best model en `Drive/TFG/V6_checkpoints/h3_full_ft_best/`.
+- V6 H2 ✅ DataCollator validado.
+- V6 H1 ✅ Bootstrap.
 - V5 cerrado: `Lacax/deepseek_ocr_lora_v5` (eval_loss 0.1274, alucinación de items confirmada)
 - V4 conservado: `Lacax/deepseek_ocr_lora`
 - Pipeline producción Scannet: OCR.space + DeepSeek-chat (sin cambios)
 
-## Foco siguiente: H2 — Formato target + DataCollator
+## Foco siguiente: H5 — Demo Gradio + verificación cruzada OCR.space
 
-Sesión pausada. Al retomar:
+Tareas H5:
 
-1. Leer este archivo + `memory/bot/decisions.md` (V6 H1) + `Documentacion/plan_v6.md` § H2.
-2. Diseñar formato del target Florence-2:
-   - Input: `pixel_values` + `input_ids = <EXTRACT_TOTAL>`
-   - Label: `total<loc_x1><loc_y1><loc_x2><loc_y2>` (los `<loc_*>` son tokens nativos de Florence-2 para bbox, ya en su vocab)
-   - Normalizar bbox a 0–999 sobre la imagen redimensionada por el processor (768×768 default)
-3. Implementar `DataCollator` en una nueva celda del notebook (o módulo `.py` separado):
-   - Recibe batch de `{image_path, total, bbox}`
-   - Llama `processor(text=prompt, images=img, return_tensors='pt')` → `pixel_values`, `input_ids`
-   - Tokeniza target → `labels` (mask `-100` en los input_ids)
-4. Verificar con `next(iter(DataLoader))` que las shapes son las esperadas y que `labels` se decodifica al string original.
+1. Reutilizar Gradio de `Pruebas_de_inferencia_V5.ipynb` adaptado:
+   - Input: ticket → Florence-2 (`<EXTRACT_TOTAL>`) → `(total, bbox)`.
+   - Crop del bbox predicho.
+   - OCR.space sobre el crop → texto literal.
+   - Verdict: ✅ si `parse_float(ocr_crop) ≈ pred_total`, ⚠️ si difieren.
+2. Probar con tickets propios fuera del dataset (incluyendo rotados, multi-aparición del total, formato no español).
+3. Output: notebook + screenshot en `memory/bot/experiments.md`.
+
+Después H6 (memory bank + redacción TFG): tabla comparativa V5 vs V6, lecciones aprendidas.
+
+## V6 — H3 (full fine-tune, ejecutado)
+
+- TrainingArguments: bs=1, grad_accum=4, lr=1e-5 cosine + 10% warmup, fp16 AMP, 10 ép. con `EarlyStoppingCallback(patience=2)`, `load_best_model_at_end=True`, `save_total_limit=2`.
+- Resultado por época (eval_loss): 1.5655 → 1.4505 → **1.3980** → 1.4426 → 1.5133.
+- Train loss: 2.72 → 1.29 → 0.90 → 0.67 → 0.45 (overfitting evidente desde época 4).
+- Warning de tied weights de Florence-2 al recargar best: mitigado con `model.tie_weights()` en celda Q.
+- No hizo falta fallback LoRA (VRAM holgada).
+
+## V6 — H2 (formato + DataCollator, ejecutado)
+
+- Cuantización bbox: 1000 bins sobre tamaño PIL original (no 768×768) — fórmula `processing_florence2.py` upstream.
+- Target string: `"{total:.2f}<loc_x1><loc_y1><loc_x2><loc_y2>"`. BOS/EOS añadidos por tokenizer.
+- Encoder-decoder BART-style: `labels` enteros (no concatenar prompt), `pad_token_id`→`-100`.
+- `Florence2TotalCollator` reutiliza `load_image` del notebook (cache de `hf_hub_download`).
 
 ## V6 — H1 (ejecutado)
 

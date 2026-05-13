@@ -119,3 +119,29 @@
 **H6.8 PENDIENTE (U)**: lanzar entrenamiento V5 en RunPod RTX 4090
 **H1.6 PENDIENTE (U)**: relanzar Test A en Colab con gradio_demo.py
 **H7 (post-H6.8)**: anotar 30 tickets externos con Gemini → F1 holdout V5 vs Pipeline vs V4
+
+## 2026-05-02 — V6 H4 completado (eval cuantitativo holdout)
+
+- Añadidas celdas R/S/T (parser, loop eval, tabla agregada), U (visualización), diagnóstico, V (inferencia OOD).
+- Resultado holdout (14 imgs test): total ±0.01 = **85.7 %**, malformed = 0, IoU≥0.7 = 64.3 %, IoU media = 0.59.
+- 1 error real de OCR (3↔5), 1 número mal cerrado (17.17.7), 3 falsos negativos del IoU por GT bbox apuntando a instancia distinta del mismo número (subtotal/total repetidos).
+- Test OOD con imagen del usuario: el modelo localiza correctamente la zona del total → no es solo memorización.
+- H4 cerrado. Pendiente H5 (Gradio + verificación cruzada OCR.space) y H6 (memory bank + redacción TFG).
+
+## 2026-05-02 — V6 H3 completado (fine-tune Florence-2 en T4)
+
+- Añadidas celdas L→Q al notebook (prep modelo, dataset wrapper, TrainingArguments, Trainer, train, save best, sanity check).
+- **Resultado**: EarlyStopping en época 5/10, mejor en **época 3** con `eval_loss=1.3980`. Train loss 2.72 → 0.45 (overfitting típico de dataset chico, 104 train).
+- **VRAM pico 6.44 GB** sobre T4 (cómodo, sin necesidad de fallback LoRA).
+- `train_runtime=477s` (~8 min para 5 épocas).
+- Warning conocido de Florence-2: `embed_tokens.weight` / `lm_head.weight` reportados como missing al recargar best — bug de safetensors deduplicando pesos tied. Solución: `model.tie_weights()` post-load (celda Q).
+- Best model guardado en `Drive/TFG/V6_checkpoints/h3_full_ft_best/`.
+- **Pendiente**: ejecutar celda Q tras `tie_weights()` para validar que generation funciona y que las predicciones no son ruido puro antes de pasar a H4.
+
+## 2026-05-01 — V6 H2 completado (DataCollator Florence-2)
+
+- Notebook `Deepseek OCR/codigo/V6_Florence2_Total.ipynb` ampliado con celdas I, J, K
+- **Celda I**: helpers `quantize_bbox` (1000 bins, sobre tamaño original PIL) + `format_target` (`"{total:.2f}<loc_x1><loc_y1><loc_x2><loc_y2>"`)
+- **Celda J**: `Florence2TotalCollator` produce `{input_ids, attention_mask, pixel_values, labels}` con `pad_token_id`→`-100`
+- **Celda K**: verificación end-to-end con DataLoader bs=2 — shapes ok, decode reproduce target esperado, forward dummy con `out.loss` finito
+- Ejecutado en Colab T4 sin OOM. H2 cerrado, listo para H3 (Trainer real)

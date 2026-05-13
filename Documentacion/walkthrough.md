@@ -317,3 +317,137 @@ python DataAugmentation/upload_to_hf_total.py --token $env:HF_TOKEN
 - Celda F del notebook ajustada: `load_image(name, labeled=False|True)` y vista lado a lado original vs etiquetada del primer ejemplo de val como sanity check del GT.
 - Notebook ejecutado en Colab T4 sin problemas: A→H sin OOM, smoke test zero-shot OK.
 - Sesión V6 pausada. Próximo retomar: H2 (formato target + DataCollator).
+
+## V6 H2 — Formato target Florence-2 + DataCollator (2026-05-01)
+
+### Qué se hizo
+
+Añadidas tres celdas al notebook `Deepseek OCR/codigo/V6_Florence2_Total.ipynb`:
+
+- **Celda I — Helpers de formato**: `quantize_bbox(bbox, image_size, num_bins=1000)` y `format_target(total, bbox, image_size)`. La cuantización aplica la fórmula upstream de Florence-2 (`processing_florence2.py`): `floor(coord / (dim / 1000))` con clamp a `[0, 999]`, sobre la **imagen original** (no la redimensionada por el processor). El target string es `"{total:.2f}<loc_x1><loc_y1><loc_x2><loc_y2>"`.
+- **Celda J — `Florence2TotalCollator`**: clase callable que recibe un batch de `{image_path, total, bbox}` y devuelve `{input_ids, attention_mask, pixel_values, labels}`. Reutiliza `load_image` (cache local de `hf_hub_download`). Los `pad_token_id` en labels se reemplazan por `-100` para que no contribuyan al loss.
+- **Celda K — Verificación end-to-end**: DataLoader bs=2 sobre el split `train`, asserts de shapes, decode de `labels[0]` comparado contra `format_target` esperado, y forward dummy en GPU verificando que `out.loss` es finito.
+
+### Decisiones tomadas
+
+- **1000 bins** (`<loc_0>`–`<loc_999>`), no 768×768. Florence-2 cuantiza sobre el tamaño original PIL; el resize a 768×768 lo hace el processor internamente y es transparente al collator. Esto simplifica el código: no hay que rastrear el factor de resize.
+- **No concatenar prompt + answer en `labels`**: Florence-2 es encoder-decoder (BART), distinto de DeepSeek-VL (decoder-only V5). El answer entero va como `labels`; el modelo genera `decoder_input_ids` por shift-right internamente.
+- **Sin `€` en target**: solo número y bbox. Reduce vocabulario a aprender.
+- **Reutilizar `load_image` del notebook**, no `IMAGE_DIR` separado: aprovecha la cache de HuggingFace ya en uso en celda F.
+
+### Cómo verificar
+
+1. Abrir `V6_Florence2_Total.ipynb` en Colab T4.
+2. Run all (A→K).
+3. Criterios de éxito en celda K:
+   - Shapes: `pixel_values.shape == (2, 3, 768, 768)`, `labels.shape[0] == 2`.
+   - Decode de `labels[0]` contiene el target esperado del primer ejemplo de `train`.
+   - `out.loss` finito (no NaN/Inf).
+   - VRAM pico < 12 GB.
+
+### Cierre H2
+
+H2 cerrado. Listo para H3: `TrainingArguments` + `Trainer.train()` con `batch=1`, `grad_accum=4`, `gradient_checkpointing`, `fp16`, `lr=1e-5`, 10 épocas, `EarlyStoppingCallback(patience=2)`, checkpoints a Drive cada época.
+
+## V6 H3 — Full fine-tune Florence-2 en Colab T4 (2026-05-02)
+
+### Qué se hizo
+
+Añadidas celdas L→Q al notebook `Deepseek OCR/codigo/V6_Florence2_Total.ipynb`:
+
+- **L** — Conversión a fp32 in-place (`model.float()`), `gradient_checkpointing_enable()`, `use_cache=False`, `model.train()`. La conversión preserva el `resize_token_embeddings` de la celda G.
+- **M** — Wrapper `TicketsTotalDataset(torch.utils.data.Dataset)` sobre las listas cargadas en F.
+- **N** — `TrainingArguments` (bs=1, grad_accum=4, lr=1e-5, cosine + 10 % warmup, fp16=True, fp16_full_eval=True, 10 épocas, eval/save por época, save_total_limit=2, load_best_model_at_end=True, metric_for_best_model='eval_loss') + `Trainer` con `EarlyStoppingCallback(patience=2)`.
+- **O** — `trainer.train(resume_from_checkpoint=...)` con detección automática de checkpoints previos.
+- **P** — Guardado del best model + processor a `CKPT_DIR/h3_full_ft_best/`.
+- **Q** — Sanity check post-train con `model.tie_weights()` y generación sobre 3 imgs del val.
+
+### Resultados
+
+| Época | Train loss | Eval loss |
+|-------|-----------|-----------|
+| 1     | 2.7226    | 1.5655    |
+| 2     | 1.2874    | 1.4505    |
+| **3** | **0.9033**| **1.3980** ← best |
+| 4     | 0.6696    | 1.4426    |
+| 5     | 0.4530    | 1.5133    |
+
+- EarlyStopping disparó en época 5 (patience=2). Train runtime: 477 s (~8 min).
+- VRAM pico: 6.44 GB → no fue necesario el fallback LoRA r=16.
+- Overfitting esperado en dataset chico (104 train): train loss baja monotónico mientras eval sube tras época 3.
+
+### Decisiones tomadas
+
+- **fp32 weights + Trainer fp16=True (AMP)** en lugar de fp16 weights + autocast manual: master weights fp32 evita underflow de gradientes en Florence-2-base, sobra memoria en T4 (230M params).
+- **load_best_model_at_end=True**: pese al warning de "missing keys" (`embed_tokens.weight`, `lm_head.weight`), es el bug conocido de Florence-2 con safetensors deduplicando tied weights. Se mitiga con `model.tie_weights()` post-load (celda Q).
+- **save_total_limit=2**: cada checkpoint de Florence-2-base ocupa ~1 GB en Drive — limitar evita llenar el disco gratuito.
+- **No reentrenar con LoRA**: la VRAM holgada hace innecesario el fallback. Si en H4 los resultados son flojos, antes que LoRA conviene replantear (más datos, otra arquitectura, etc.).
+
+### Cómo verificar
+
+1. Ejecutar celda Q en la sesión actual (no requiere reentrenar).
+2. Las predicciones sobre `val[0]`, `val[3]`, `val[7]` deben tener forma `<s>{NUMBER}<loc_*><loc_*><loc_*><loc_*></s>` (no ruido puro).
+3. Si la cabeza de generación está rota por el bug de tied weights, el output será cadena vacía o repetición de un solo token — en ese caso `model.tie_weights()` lo arregla.
+
+### Cierre H3
+
+H3 cerrado. Pendiente celda Q como gate antes de H4. Siguiente: H4 — evaluación cuantitativa sobre 14 imgs del split test (exact match ±0.01 € sobre `total`, IoU bbox, tasa de alucinación de output mal-formado), más verificación cruzada con OCR.space sobre el crop del bbox.
+
+## V6 H4 — Evaluación cuantitativa sobre holdout (2026-05-02)
+
+### Qué se hizo
+
+Añadidas celdas R/S/T/U + diagnóstico + V al notebook:
+
+- **R** — Helpers de eval: `parse_output` (regex `{float}<loc_x1><loc_y1><loc_x2><loc_y2>`), `dequantize_bbox` (midpoint del bin, sobre tamaño PIL original), `iou`.
+- **S** — Loop de inferencia greedy sobre los 14 imgs del split `test`, con métrica por muestra (exact, ±0.01, IoU, malformed).
+- **T** — Tabla pandas + agregados + listado de fallos con `pred_raw`.
+- **U** — Visualización 4×4 de pred (rojo) vs GT (verde) sobre cada ticket del holdout.
+- Diagnóstico — Imprime coords crudas de los IoU=0 con total OK (clave para distinguir bug de fallo real).
+- **V** — Inferencia OOD sobre imagen del usuario (`/content/img.png`).
+
+### Resultados sobre el holdout (14 imgs)
+
+| Métrica | Valor |
+|---------|-------|
+| n_test | 14 |
+| malformed | 0 (0.0 %) |
+| total exact | 12 (85.7 %) |
+| total ±0.01 € | 12 (85.7 %) |
+| IoU media | 0.590 |
+| IoU ≥ 0.5 | 10 (71.4 %) |
+| IoU ≥ 0.7 | 9 (64.3 %) |
+
+### Análisis de los 5 fallos
+
+| Caso | Fallo real | Diagnóstico |
+|------|-----------|-------------|
+| `recibo_almeria_020` | ✅ sí | Confunde `3↔5` (`32.13` → `52.13`). Único error de lectura real. |
+| `recibo_almeria_139` | ✅ parcial | Output `17.17.7` (dígitos extra); el regex captura `17.7` pero el modelo no cierra limpio el número. |
+| `recibo_almeria_009` | ❌ falso negativo | Total OK, IoU=0. Bbox del modelo apunta a otra instancia del mismo número. |
+| `recibo_almeria_103` | ❌ falso negativo | Idem. |
+| `recibo_almeria_062` | ❌ falso negativo | Idem. |
+
+Verificado con celda diagnóstico: las coordenadas X coinciden casi clavadas en los tres falsos negativos, las Y difieren entre 40 y 250 px. Patrón: el ticket tiene **varias apariciones del mismo número** (subtotal, base, total, IVA), H0 con OCR.space + matcher eligió una, el modelo aprendió a predecir otra. Ambos bboxes son válidos para el campo `total`; la métrica IoU está sesgada cuando el GT es solo una de varias soluciones correctas.
+
+### Test OOD
+
+Imagen propia del usuario (`/content/img.png`, fuera del dataset) → el modelo localiza correctamente la zona del total. Confirma que no es solo memorización del train.
+
+### Decisiones tomadas
+
+- **Cerrar H4 con la lectura honesta**: la métrica principal es `total ±0.01 = 85.7 %` con `0 malformed`. La métrica IoU es informativa pero ruidosa (n=14 + GT bbox como única solución correcta cuando hay varias).
+- **No relabel del holdout para mejorar la métrica**: sería trampear. Se documenta el sesgo.
+- **Verificación cruzada con OCR.space sobre el crop**: trasladada a H5 (es el corazón de la demo Gradio).
+- **V6.1 propuesta para futura iteración** (no abre tarea ahora): en H0, anotar todas las apariciones del total y evaluar IoU contra el mejor match del conjunto.
+
+### Cómo verificar
+
+1. Run all del notebook A→T en Colab T4.
+2. Tabla agregada en celda T debe mostrar `total ±0.01 ≥ 85 %`, `malformed = 0`.
+3. Celda U: las imágenes 028, 039, 029, 133, 084, 072, 144, 111, 051 deben tener bbox rojo y verde casi superpuestos.
+4. Celda V con tu propio ticket: el bbox rojo debe caer sobre la zona del total.
+
+### Cierre H4
+
+H4 cerrado. Florence-2 fine-tuned sobre 104 train demuestra capacidad de extracción del campo `total` con 85.7 % de acierto exacto sobre holdout y generalización a OOD. Siguiente: H5 — demo Gradio con verificación cruzada OCR.space sobre el crop del bbox predicho (verdict ✅ si el OCR del crop coincide con `pred_total`).

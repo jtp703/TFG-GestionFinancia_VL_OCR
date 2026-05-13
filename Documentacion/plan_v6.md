@@ -45,22 +45,27 @@ Comparativa documentada Donut vs Florence-2 vs PaliGemma 2:
 - Florence-2-base cargado en fp16, dataset `Lacax/Tickets-total` accesible, smoke test zero-shot ejecutado.
 - `etiquetadas/` subidas al repo HF como verificación visual humana (NO usar en training: data leakage).
 
-### H2 — Formato Florence-2 + DataCollator — pendiente
+### H2 — Formato Florence-2 + DataCollator — ✅ **COMPLETADO** (ejecutado 2026-05-01)
 
-- Tarea: `<OCR_WITH_REGION>` filtrado al total, o tag custom `<EXTRACT_TOTAL>`
-- Resolución: 768×768 (default Florence-2)
-- DataCollator: `processor(text=prompt, images=img)`
+- Tag custom `<EXTRACT_TOTAL>` (decisión H1).
+- Cuantización bbox: 1000 bins sobre tamaño PIL **original** (formula upstream `processing_florence2.py`), no sobre 768×768.
+- Target: `"{total:.2f}<loc_x1><loc_y1><loc_x2><loc_y2>"`. BOS/EOS por tokenizer.
+- Notebook celdas I (helpers), J (`Florence2TotalCollator`), K (verificación) — pasa shapes, decode y forward dummy con `out.loss` finito.
 
-### H3 — Fine-tune en T4 — pendiente
+### H3 — Fine-tune en T4 — ✅ **COMPLETADO** (ejecutado 2026-05-02)
 
-- `batch=1`, `grad_accum=4`, `gradient_checkpointing`, `fp16`, `lr=1e-5`, 10 épocas, EarlyStopping
-- Full fine-tune primero, fallback a LoRA r=16 si OOM
-- Checkpoints a Drive cada época (Colab corta a 12h)
+- Full fine-tune con Trainer (no hizo falta LoRA: VRAM pico 6.44 GB)
+- EarlyStopping en época 5/10, **mejor en época 3** con `eval_loss=1.3980`
+- Train loss 2.72 → 0.45 (overfitting esperado, dataset 104 train)
+- Best model en `Drive/TFG/V6_checkpoints/h3_full_ft_best/`
+- Mitigado el bug de tied weights de Florence-2 con `model.tie_weights()` post-load (celda Q)
 
-### H4 — Evaluación cuantitativa con holdout — pendiente
+### H4 — Evaluación cuantitativa con holdout — ✅ **COMPLETADO** (ejecutado 2026-05-02)
 
-- Sobre 14 imgs test: exact match, tolerancia ±0.01, IoU bbox, tasa de alucinación
-- Verificación cruzada con OCR.space sobre el crop del bbox
+- Holdout 14 imgs test: `total ±0.01 = 85.7 %`, `malformed = 0/14`, `IoU≥0.7 = 64.3 %`, IoU media 0.59.
+- 1 error real (3↔5 mal leído), 1 output con dígitos extra (17.17.7), 3 falsos negativos de IoU por instancia repetida del total en el ticket (subtotal/IVA con el mismo valor).
+- Test OOD (imagen del usuario fuera del dataset): el modelo localiza la zona del total correctamente.
+- Verificación cruzada con OCR.space sobre el crop → trasladada a H5 (forma parte de la demo Gradio).
 
 ### H5 — Demo Gradio + validación cruzada OCR.space — pendiente
 
@@ -79,7 +84,10 @@ Comparativa documentada Donut vs Florence-2 vs PaliGemma 2:
 
 - H0 ✅ cerrado: `dataset_total.jsonl` con 130 entradas (matcher reforzado + relabel manual)
 - H1 ✅ ejecutado: notebook corrió A→H en Colab T4 sin OOM, dataset `Lacax/Tickets-total` accesible, tag `<EXTRACT_TOTAL>` añadido y verificado.
-- **Siguiente acción**: H2 — diseñar formato target (`total<loc_*>`) y DataCollator. Sesión pausada hasta retomar.
+- H2 ✅ ejecutado: celdas I/J/K validadas en Colab T4 (collator OK, decode reproduce target, forward dummy con loss finito).
+- H3 ✅ ejecutado (2026-05-02): full fine-tune, mejor época 3, eval_loss=1.3980, VRAM pico 6.44 GB.
+- H4 ✅ ejecutado (2026-05-02): holdout total±0.01 85.7 %, IoU≥0.7 64.3 %, malformed 0. Test OOD positivo.
+- **Siguiente acción**: H5 — demo Gradio + verificación cruzada OCR.space sobre el crop del bbox.
 
 ---
 
