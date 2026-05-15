@@ -13,7 +13,7 @@ export function Scan() {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [camError, setCamError] = useState<string | null>(null)
 
-  const { estado, resultado, errorMsg, duplicado, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
+  const { estado, resultado, errorMsg, duplicado, imagenPreview, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
 
   // Iniciar cámara al montar (solo en estado idle)
   const startCamera = useCallback(async () => {
@@ -96,16 +96,28 @@ export function Scan() {
 
   if (estado === 'verify' && resultado) {
     return (
-      <div className="p-4 pb-8 max-w-lg mx-auto">
-        <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-          Verificar ticket
-        </h2>
-        <VerifyForm
-          inicial={resultado}
-          duplicado={duplicado}
-          onConfirmar={guardar}
-          onCancelar={cancelar}
-        />
+      <div className="pb-8 max-w-lg mx-auto">
+        {imagenPreview && (
+          <div className="w-full overflow-hidden" style={{ maxHeight: '220px', background: '#000' }}>
+            <img
+              src={imagenPreview}
+              alt="Ticket escaneado"
+              className="w-full object-contain"
+              style={{ maxHeight: '220px' }}
+            />
+          </div>
+        )}
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+            Verificar ticket
+          </h2>
+          <VerifyForm
+            inicial={resultado}
+            duplicado={duplicado}
+            onConfirmar={guardar}
+            onCancelar={cancelar}
+          />
+        </div>
       </div>
     )
   }

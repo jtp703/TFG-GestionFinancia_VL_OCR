@@ -129,3 +129,37 @@ Fix aplicado en scan.ts: normalización unicode ，→, ：→: antes de JSON.pa
 - Test OOD (img.png subida por el usuario): el modelo localiza correctamente la zona del total en un ticket fuera del dataset → generalización aparente, no solo memorización.
 
 **Para una hipotética V6.1**: anotar todas las apariciones del total en H0 y evaluar IoU contra el mejor match del conjunto.
+
+## DeepSeek-OCR-2 LoRA (2026-05-13) — evaluación inicial
+
+- Modelo: `unsloth/DeepSeek-OCR-2` (~3.5B, MoE), LoRA r=16 alpha=16, 86M params (2.48%)
+- Dataset: `Lacax/Tickets/original` (133 muestras, mismo conjunto usado en training → mide convergencia)
+- Plataforma: Google Colab T4, 23 min, VRAM pico 11.7 GB
+- Adapter guardado en: `Lacax/deepseek_original_dataset`
+- Tarea: extracción full JSON (comercio, cif, fecha, total, items[])
+
+### Métricas sobre train set (133 muestras)
+
+| Métrica | Valor |
+|---------|-------|
+| malformed JSON | 66 (49.6 %) |
+| total ±0.01 (global) | 62 (46.6 %) |
+| total ±0.01 (sobre válidos) | ~92.5 % |
+| items count match | 45 (33.8 %) |
+| items alucinados (>GT) | 4 (3.0 %) |
+
+### Diagnóstico de los 66 malformed
+
+Dos tipos identificados:
+1. **Salida vacía** ("directly resize" sin JSON): modelo no genera output para esa imagen
+2. **JSON truncado**: modelo genera JSON válido pero se corta antes del `}` final → regex no matchea. Causa probable: `max_new_tokens` por defecto insuficiente para tickets con muchos items
+
+### Lectura honesta
+
+- El modelo **sí aprendió el formato JSON** — 92.5% de acierto en total cuando el output es válido
+- El problema principal es la **fiabilidad del output** (49.6% malformed), no la alucinación (V5 tenía >40% alucinación; aquí solo 3%)
+- Pendiente: fix con `max_new_tokens=1024` y diagnóstico por tipo de fallo
+
+### Próximo paso
+
+Reclasificar fallos (vacíos / truncados / JSON inválido) y re-inferir truncados con token budget ampliado. Resultado esperado: malformed baje a ~20-30% (solo los vacíos genuinos).

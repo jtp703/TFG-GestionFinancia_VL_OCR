@@ -1,18 +1,5 @@
-"""
-Pipeline de anotación automática de tickets con Gemini 2.5 Flash.
-Genera dataset_golden.jsonl con JSON estrictamente válido y schema unificado.
-
-Uso:
-    python annotate_with_gemini.py
-    python annotate_with_gemini.py --images-dir F:/datasetTickets/v3
-    python annotate_with_gemini.py --resume          # continúa desde checkpoint
-    python annotate_with_gemini.py --delay 2.0       # más lento si hay rate limit
-
-Dependencias:
-    pip install google-genai Pillow
-
-GEMINI_API_KEY debe estar en Scannet/.env.local o en el entorno del sistema.
-"""
+# Anotación automática de tickets con Gemini 2.5 Flash.
+# GEMINI_API_KEY en Scannet/.env.local o en el entorno.
 
 import os
 import json
@@ -22,13 +9,8 @@ import re
 from pathlib import Path
 
 from google import genai
-from google.genai import types
 from PIL import Image
 
-
-# ---------------------------------------------------------------------------
-# Carga de API key desde Scannet/.env.local (si no está en el entorno)
-# ---------------------------------------------------------------------------
 
 def _load_dotenv(env_path: Path) -> None:
     if not env_path.exists():
@@ -43,10 +25,6 @@ def _load_dotenv(env_path: Path) -> None:
 
 SCRIPT_DIR = Path(__file__).parent
 _load_dotenv(SCRIPT_DIR.parent / "Scannet" / ".env.local")
-
-# ---------------------------------------------------------------------------
-# Modelo y prompt
-# ---------------------------------------------------------------------------
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
@@ -88,21 +66,15 @@ CASOS ESPECIALES:
 
 Devuelve ÚNICAMENTE el JSON. Sin ningún texto adicional."""
 
-# ---------------------------------------------------------------------------
-# Validación del output de Gemini
-# ---------------------------------------------------------------------------
-
 PLACEHOLDER_WORDS = {"VARIOS", "N/A", "?", "...", "ILEGIBLE", "TEXTO"}
 
 
-def validate_annotation(ann: dict, image_name: str) -> tuple[bool, list[str]]:
-    """Retorna (es_válido, lista_de_errores)."""
+def validate_annotation(ann: dict) -> tuple[bool, list[str]]:
     if "error" in ann:
         return True, []
 
     errors = []
-    required = ["comercio", "cif", "fecha", "fecha_original", "total", "items"]
-    for field in required:
+    for field in ("comercio", "cif", "fecha", "fecha_original", "total", "items"):
         if field not in ann:
             errors.append(f"campo faltante: {field}")
 
@@ -120,28 +92,23 @@ def validate_annotation(ann: dict, image_name: str) -> tuple[bool, list[str]]:
             if not desc:
                 errors.append(f"item[{i}] sin descripcion")
             elif desc.upper().strip() in PLACEHOLDER_WORDS:
-                errors.append(f"item[{i}] usa placeholder: '{desc}'")
+                errors.append(f"item[{i}] placeholder: '{desc}'")
 
             precio = item.get("precio")
             if precio is None:
                 errors.append(f"item[{i}] sin precio")
             elif not isinstance(precio, (int, float)):
-                errors.append(f"item[{i}] precio no es número: {type(precio)}")
+                errors.append(f"item[{i}] precio no es número")
 
             cantidad = item.get("cantidad")
             if cantidad is not None and not isinstance(cantidad, (int, float)):
-                errors.append(f"item[{i}] cantidad no es número ni null: {type(cantidad)}")
+                errors.append(f"item[{i}] cantidad no es número ni null")
 
-    # Ticket-fantasma: comercio vacío + items vacíos
     if ann.get("comercio") == "" and ann.get("items") == []:
-        errors.append("ticket-fantasma: comercio vacío e items vacíos simultáneamente")
+        errors.append("ticket fantasma: comercio e items vacíos")
 
     return len(errors) == 0, errors
 
-
-# ---------------------------------------------------------------------------
-# Llamada a Gemini con reintentos
-# ---------------------------------------------------------------------------
 
 def _strip_markdown(text: str) -> str:
     text = text.strip()
@@ -151,7 +118,6 @@ def _strip_markdown(text: str) -> str:
 
 
 def annotate_image(client: genai.Client, image_path: Path) -> dict | None:
-    """Llama a Gemini y retorna el dict anotado, o None si falla tras reintentos."""
     img = Image.open(image_path)
 
     for attempt in range(3):
@@ -160,11 +126,10 @@ def annotate_image(client: genai.Client, image_path: Path) -> dict | None:
                 model=GEMINI_MODEL,
                 contents=[img, GOLDEN_PROMPT],
             )
-            text = _strip_markdown(response.text)
-            return json.loads(text)
+            return json.loads(_strip_markdown(response.text))
 
         except json.JSONDecodeError as e:
-            print(f"    ⚠  JSON inválido (intento {attempt + 1}/3): {e}")
+            print(f"    JSON invalido (intento {attempt + 1}/3): {e}")
             if attempt < 2:
                 time.sleep(2)
 
@@ -172,73 +137,40 @@ def annotate_image(client: genai.Client, image_path: Path) -> dict | None:
             msg = str(e)
             if "429" in msg or "quota" in msg.lower():
                 wait = 30 * (attempt + 1)
-                print(f"    ⏳ Rate limit — esperando {wait}s...")
+                print(f"    rate limit, esperando {wait}s...")
                 time.sleep(wait)
             else:
-                print(f"    ❌ Error Gemini (intento {attempt + 1}/3): {e}")
+                print(f"    error Gemini (intento {attempt + 1}/3): {e}")
                 if attempt < 2:
                     time.sleep(5 * (attempt + 1))
 
     return None
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
-    parser = argparse.ArgumentParser(description="Anotar tickets con Gemini 2.5 Flash")
-    parser.add_argument(
-        "--images-dir",
-        type=Path,
-        default=Path("F:/datasetTickets/v3"),
-        help="Directorio con las imágenes de tickets",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=SCRIPT_DIR / "imagenes" / "dataset_golden.jsonl",
-        help="Ruta del JSONL de salida",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Continuar desde checkpoint (añade al fichero existente)",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=1.5,
-        help="Segundos de espera entre llamadas a la API (default: 1.5)",
-    )
-    parser.add_argument(
-        "--start-from",
-        type=int,
-        default=1,
-        metavar="N",
-        help="Número de imagen (1-based, inclusive) desde la que empezar (default: 1)",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--images-dir", type=Path, default=Path("F:/datasetTickets/v3"))
+    parser.add_argument("--output", type=Path, default=SCRIPT_DIR / "imagenes" / "dataset_golden.jsonl")
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--delay", type=float, default=1.5)
+    parser.add_argument("--start-from", type=int, default=1, metavar="N")
     args = parser.parse_args()
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise SystemExit(
-            "ERROR: GEMINI_API_KEY no encontrada.\n"
-            "Exporta la variable o añádela a Scannet/.env.local"
-        )
+        raise SystemExit("GEMINI_API_KEY no encontrada")
 
     client = genai.Client(api_key=api_key)
 
-    images_dir: Path = args.images_dir
+    images_dir = args.images_dir
     if not images_dir.is_absolute():
         images_dir = SCRIPT_DIR / images_dir
     if not images_dir.exists():
-        raise SystemExit(f"ERROR: directorio de imágenes no existe: {images_dir}")
+        raise SystemExit(f"directorio no existe: {images_dir}")
 
-    output_path: Path = args.output
+    output_path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Checkpoint: imágenes ya procesadas
     processed: set[str] = set()
     if args.resume and output_path.exists():
         with open(output_path, encoding="utf-8") as f:
@@ -247,73 +179,58 @@ def main():
                     processed.add(json.loads(line)["image_path"])
                 except Exception:
                     pass
-        print(f"Reanudando: {len(processed)} imágenes ya procesadas")
+        print(f"reanudando: {len(processed)} ya procesadas")
 
     extensions = {".jpg", ".jpeg", ".png"}
     all_images = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in extensions)
 
     if args.start_from > 1:
         all_images = all_images[args.start_from - 1:]
-        print(f"Saltando a imagen #{args.start_from} (quedan {len(all_images)} en la lista)")
+        print(f"empezando desde #{args.start_from} ({len(all_images)} restantes)")
 
     pending = [p for p in all_images if p.name not in processed]
-
-    print(f"Imágenes totales: {len(all_images)} | Pendientes: {len(pending)}")
-    print(f"Output: {output_path}\n")
+    print(f"total={len(all_images)}  pendientes={len(pending)}  output={output_path}\n")
 
     errors_log = []
     ok_count = 0
 
     with open(output_path, "a", encoding="utf-8") as out:
         for idx, img_path in enumerate(pending):
-            prefix = f"[{idx + 1:3d}/{len(pending)}] {img_path.name}"
-            print(f"{prefix} ...", end=" ", flush=True)
+            print(f"[{idx + 1:3d}/{len(pending)}] {img_path.name} ...", end=" ", flush=True)
 
             ann = annotate_image(client, img_path)
 
             if ann is None:
-                print("❌ FALLO GEMINI")
+                print("fallo gemini")
                 errors_log.append({"image": img_path.name, "error": "fallo_gemini"})
                 continue
 
-            is_valid, errs = validate_annotation(ann, img_path.name)
+            is_valid, errs = validate_annotation(ann)
 
             if not is_valid:
-                print(f"⚠  INVÁLIDO → {'; '.join(errs)}")
+                print(f"invalido: {'; '.join(errs)}")
                 errors_log.append({"image": img_path.name, "errors": errs, "raw": ann})
                 continue
 
             if "error" in ann:
-                print(f"🚫 {ann['error'].upper()}: {ann.get('motivo', '')}")
+                print(f"{ann['error']}: {ann.get('motivo', '')}")
             else:
-                n_items = len(ann.get("items", []))
-                total = ann.get("total", "?")
-                print(f"✅ items={n_items} total={total}€")
+                print(f"items={len(ann.get('items', []))}  total={ann.get('total', '?')}")
                 ok_count += 1
 
-            # ground_truth se guarda como objeto JSON, NO como string
-            entry = json.dumps(
-                {"image_path": img_path.name, "ground_truth": ann},
-                ensure_ascii=False,
-            )
-            out.write(entry + "\n")
-            out.flush()  # checkpoint continuo — si se interrumpe no se pierde nada
-
+            out.write(json.dumps({"image_path": img_path.name, "ground_truth": ann}, ensure_ascii=False) + "\n")
+            out.flush()
             time.sleep(args.delay)
 
-    print(f"\n{'─'*60}")
-    print(f"✅ Anotados correctamente: {ok_count}")
-    print(f"❌ Errores / inválidos:    {len(errors_log)}")
-    print(f"📄 Dataset guardado en:   {output_path}")
+    print(f"\nok={ok_count}  errores={len(errors_log)}")
 
     if errors_log:
         errors_path = output_path.parent / "annotate_errors.json"
         with open(errors_path, "w", encoding="utf-8") as f:
             json.dump(errors_log, f, ensure_ascii=False, indent=2)
-        print(f"⚠  Log de errores en:     {errors_path}")
-        print("\nImágenes con error (revisar manualmente):")
+        print(f"log de errores: {errors_path}")
         for e in errors_log:
-            print(f"  - {e['image']}: {e.get('error') or e.get('errors')}")
+            print(f"  {e['image']}: {e.get('error') or e.get('errors')}")
 
 
 if __name__ == "__main__":

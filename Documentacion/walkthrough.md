@@ -451,3 +451,44 @@ Imagen propia del usuario (`/content/img.png`, fuera del dataset) → el modelo 
 ### Cierre H4
 
 H4 cerrado. Florence-2 fine-tuned sobre 104 train demuestra capacidad de extracción del campo `total` con 85.7 % de acierto exacto sobre holdout y generalización a OOD. Siguiente: H5 — demo Gradio con verificación cruzada OCR.space sobre el crop del bbox predicho (verdict ✅ si el OCR del crop coincide con `pred_total`).
+
+---
+
+## Sesion 2026-05-13 - DeepSeek-OCR-2: evaluacion post-entrenamiento
+
+### Que se hizo
+
+1. Notebook de evaluacion (model_vs_model/Deepseek_OCR_2_modelo_original.ipynb): aniadidas 4 celdas nuevas tras la inferencia manual:
+   - Loop de batch inference sobre los 133 samples con guardado en Drive
+   - Metricas agregadas (malformed, total match, items, hallucination)
+   - Analisis de fallos (top 8 con raw output)
+   - Guardado de resultado individual en celda de inferencia manual
+
+2. Evaluacion ejecutada: resultados reales del modelo sobre el train set.
+
+3. Scripts limpiados: relabel_total.py, annotate_with_gemini.py, upload_to_hf.py
+
+### Resultados
+
+| Metrica | Valor |
+|---------|-------|
+| Malformed JSON | 49.6% (66/133) |
+| Total +-0.01 global | 46.6% (62/133) |
+| Total +-0.01 sobre validos | ~92.5% |
+| Hallucination items>GT | 3.0% |
+
+### Diagnostico malformed
+
+Dos tipos: (1) salida vacia "directly resize" sin JSON; (2) JSON truncado por max_new_tokens insuficiente.
+El modelo aprendio el formato y extrae el total bien cuando genera output valido. Sin problema de alucinacion (V5 tenia >40%).
+
+### Como verificar
+
+Resultados: Drive/TFG/eval_results/deepseek_ocr2_batch_results.json
+Adapter: Lacax/deepseek_original_dataset (HuggingFace)
+
+### Proxima sesion
+
+- Clasificar 71 fallos por tipo (vacio / truncado / json invalido)
+- Re-inferir truncados con max_new_tokens=1024
+- Guardar resumen diagnostico en Drive

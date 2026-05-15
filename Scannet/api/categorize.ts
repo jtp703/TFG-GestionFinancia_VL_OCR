@@ -21,14 +21,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token)
   if (authError || !user) return res.status(401).json({ error: 'Token inválido' })
 
-  const { comercio } = req.body ?? {}
+  const { comercio, items } = req.body ?? {}
   if (!comercio) return res.status(400).json({ error: 'Falta el campo comercio' })
 
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'DEEPSEEK_API_KEY no configurado' })
 
-  const prompt = `Clasifica el siguiente comercio español en exactamente una de estas categorías: ${CATEGORIAS.join(', ')}.
-Comercio: "${comercio}"
+  const itemsDesc = ((items ?? []) as any[]).slice(0, 8).map((i: any) => i.descripcion).filter(Boolean).join(', ')
+  const contexto = itemsDesc ? `\nProductos del ticket: ${itemsDesc}` : ''
+  const prompt = `Clasifica este establecimiento en exactamente una de estas categorías: ${CATEGORIAS.join(', ')}.
+Nota: bares, cafeterías, restaurantes y cualquier establecimiento de comida o bebida preparada → Ocio.
+Comercio: "${comercio}"${contexto}
 Responde únicamente con el nombre de la categoría, sin explicación ni puntuación adicional.`
 
   try {

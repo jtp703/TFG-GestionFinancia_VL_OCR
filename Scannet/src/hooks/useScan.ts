@@ -25,6 +25,7 @@ interface UseScanReturn {
   resultado:     ResultadoOCR | null
   errorMsg:      string | null
   duplicado:     boolean
+  imagenPreview: string | null
   metodoPago:    MetodoPago
   setMetodoPago: (m: MetodoPago) => void
   enviar:        (imageBlob: Blob) => Promise<void>
@@ -58,12 +59,15 @@ export function useScan(): UseScanReturn {
   const [resultado, setResultado]       = useState<ResultadoOCR | null>(null)
   const [errorMsg, setErrorMsg]         = useState<string | null>(null)
   const [duplicado, setDuplicado]       = useState(false)
+  const [imagenPreview, setImagenPreview] = useState<string | null>(null)
   const [metodoPago, setMetodoPago]     = useState<MetodoPago>('efectivo')
   const [ultimaImagen, setUltimaImagen] = useState<Blob | null>(null)
 
   /** Envía la imagen al endpoint /api/scan (o devuelve mock si VITE_USE_MOCK_OCR=true) */
   async function enviar(imageBlob: Blob) {
     setUltimaImagen(imageBlob)
+    if (imagenPreview) URL.revokeObjectURL(imagenPreview)
+    setImagenPreview(URL.createObjectURL(imageBlob))
     setEstado('loading')
     setErrorMsg(null)
     setDuplicado(false)
@@ -211,7 +215,7 @@ export function useScan(): UseScanReturn {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ comercio: datos.comercio }),
+        body: JSON.stringify({ comercio: datos.comercio, items: datos.items }),
       })
       if (catResponse.ok) {
         const { categoria } = await catResponse.json()
@@ -317,7 +321,9 @@ export function useScan(): UseScanReturn {
     setErrorMsg(null)
     setDuplicado(false)
     setUltimaImagen(null)
+    if (imagenPreview) URL.revokeObjectURL(imagenPreview)
+    setImagenPreview(null)
   }
 
-  return { estado, resultado, errorMsg, duplicado, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar }
+  return { estado, resultado, errorMsg, duplicado, imagenPreview, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar }
 }

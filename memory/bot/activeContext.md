@@ -1,18 +1,29 @@
 ---
-Última actualización: 2026-05-02 — V6 H4 cerrado (total±0.01 85.7 % en holdout); siguiente foco H5 (Gradio + OCR.space cross-check)
+Última actualización: 2026-05-13 — DeepSeek-OCR-2 LoRA entrenado y evaluado; mañana fix inferencia (truncado + vacíos)
 ---
 
 ## Estado actual del modelo
 
-- **V6 H4 ✅ ejecutado**. Holdout 14 imgs test: `total ±0.01 = 85.7 %`, `malformed = 0`, `IoU≥0.7 = 64.3 %`, IoU media 0.59. 3 fallos de IoU son falsos negativos (instancia repetida del total). Test OOD con imagen propia del usuario: localiza la zona del total correctamente.
-- V6 H3 ✅ Full FT, mejor época 3, eval_loss 1.3980, VRAM pico 6.44 GB. Best model en `Drive/TFG/V6_checkpoints/h3_full_ft_best/`.
-- V6 H2 ✅ DataCollator validado.
-- V6 H1 ✅ Bootstrap.
-- V5 cerrado: `Lacax/deepseek_ocr_lora_v5` (eval_loss 0.1274, alucinación de items confirmada)
-- V4 conservado: `Lacax/deepseek_ocr_lora`
+### DeepSeek-OCR-2 (model_vs_model, 2026-05-13)
+- **Entrenado** ✅: LoRA r=16, 3 epochs, 133 muestras `Lacax/Tickets/original`, T4 Colab, 23 min. Adapter en `Lacax/deepseek_original_dataset`.
+- **Evaluado** ✅: 133 muestras (train set — convergencia). Resultados: `malformed=49.6%`, `total±0.01=46.6%`, `total±0.01 sobre válidos=92.5%`, `hallucination=3%`.
+- **Diagnóstico de malformed**: dos tipos identificados — (1) salida vacía "directly resize" (modelo no genera nada), (2) JSON truncado por token limit. Fix pendiente: `max_new_tokens=1024` + diagnóstico por tipo.
+- Resultados guardados en `Drive/TFG/eval_results/deepseek_ocr2_batch_results.json`.
+
+### V6 Florence-2 (estado anterior)
+- **V6 H4 ✅ ejecutado**. Holdout 14 imgs test: `total ±0.01 = 85.7 %`, `malformed = 0`, `IoU≥0.7 = 64.3 %`, IoU media 0.59.
+- V6 H3 ✅ Full FT, mejor época 3, eval_loss 1.3980. Best model en `Drive/TFG/V6_checkpoints/h3_full_ft_best/`.
+- V5 cerrado: `Lacax/deepseek_ocr_lora_v5` (alucinación de items confirmada)
 - Pipeline producción Scannet: OCR.space + DeepSeek-chat (sin cambios)
 
-## Foco siguiente: H5 — Demo Gradio + verificación cruzada OCR.space
+## Foco siguiente: Fix inferencia DeepSeek-OCR-2
+
+1. Clasificar 71 fallos en vacíos / truncados / JSON inválido (celda A)
+2. Probar `max_new_tokens=1024` sobre casos truncados (celda B)
+3. Si vacíos persisten: investigar si `model.infer()` envía salida a stderr en vez de stdout
+4. Documentar resultado final en `experiments.md`
+
+## Foco posterior: H5 — Demo Gradio + verificación cruzada OCR.space
 
 Tareas H5:
 

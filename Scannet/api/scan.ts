@@ -39,6 +39,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ...MOCK_RESULT, metodo_pago })
   }
 
+  // Modelo local — llama al servidor Python local (DeepSeek-OCR-2 + DirectML)
+  const localModelUrl = process.env.LOCAL_MODEL_URL
+  if (localModelUrl) {
+    const { image, metodo_pago, mimeType } = req.body ?? {}
+    if (!image) return res.status(400).json({ error: 'No se recibió imagen' })
+
+    const base64Image = image.startsWith('data:') ? image.split(',')[1] : image
+    const metodoPago: string = metodo_pago ?? 'efectivo'
+
+    try {
+      const localRes = await fetch(`${localModelUrl}/infer`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ image: base64Image, mimeType: mimeType ?? 'image/jpeg' }),
+      })
+      if (!localRes.ok) {
+        const err = await localRes.text()
+        return res.status(502).json({ error: `Error modelo local: ${err}` })
+      }
+      const result = await localRes.json()
+      return res.status(200).json({
+        comercio:    result.comercio   ?? '',
+        cif:         result.cif        ?? '',
+        fecha:       result.fecha      ?? '',
+        total:       Number(result.total) || 0,
+        items:       (result.items ?? []).map((item: any) => ({
+          descripcion: item.descripcion ?? '',
+          cantidad:    Number(item.cantidad) || 1,
+          precio:      Number(item.precio)   || 0,
+        })),
+        metodo_pago: metodoPago,
+      })
+    } catch (err: any) {
+      return res.status(502).json({ error: `No se pudo conectar con el modelo local: ${err.message}` })
+    }
+  }
+
   // Autenticar usuario
   const token = req.headers.authorization?.replace('Bearer ', '')
   if (!token) return res.status(401).json({ error: 'No autorizado' })
