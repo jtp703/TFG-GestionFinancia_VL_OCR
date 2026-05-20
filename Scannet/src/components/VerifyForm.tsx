@@ -1,16 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ResultadoOCR, ProductoOCR, MetodoPago } from '../hooks/useScan'
 
 interface Props {
   inicial:     ResultadoOCR
   duplicado:   boolean
-  onConfirmar: (datos: ResultadoOCR) => void
+  onConfirmar: (datos: ResultadoOCR) => Promise<void>
   onCancelar:  () => void
 }
 
 /** Tabla de verificación editable post-OCR */
 export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar }: Props) {
+  const [guardando, setGuardando] = useState(false)
   const [comercio, setComercio]   = useState(inicial.comercio)
+  const topRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
   // Normaliza fecha a YYYY-MM-DD para el input type="date"
   // Acepta: DD/MM/YYYY, DD/MM/YYYY HH:mm:ss, YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss
   function toInputDate(f: string): string {
@@ -41,8 +47,13 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
     setItems(prev => prev.filter((_, i) => i !== index))
   }
 
-  function handleConfirmar() {
-    onConfirmar({ ...inicial, comercio, fecha, total, metodo_pago: metodo, items })
+  async function handleConfirmar() {
+    setGuardando(true)
+    try {
+      await onConfirmar({ ...inicial, comercio, fecha, total, metodo_pago: metodo, items })
+    } finally {
+      setGuardando(false)
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -56,7 +67,7 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
   }
 
   return (
-    <div style={{ color: 'var(--text-primary)' }} className="space-y-5">
+    <div ref={topRef} style={{ color: 'var(--text-primary)' }} className="space-y-5">
       {duplicado && (
         <div className="rounded-lg px-4 py-3 text-sm font-medium"
           style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
@@ -143,9 +154,10 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
           Cancelar
         </button>
         <button onClick={handleConfirmar}
-          className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-90"
+          disabled={guardando}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-brand)', color: '#fff' }}>
-          Confirmar y guardar
+          {guardando ? 'Guardando…' : 'Confirmar y guardar'}
         </button>
       </div>
     </div>

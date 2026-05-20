@@ -1,10 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit } from './_lib/rateLimit'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const TIMEOUT_MS = 30_000
+
+function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
 
 /** Ticket de prueba para modo mock */
 const MOCK_RESULT = {
@@ -49,14 +58,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const metodoPago: string = metodo_pago ?? 'efectivo'
 
     try {
-      const localRes = await fetch(`${localModelUrl}/infer`, {
+      const localRes = await fetchWithTimeout(`${localModelUrl}/infer`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ image: base64Image, mimeType: mimeType ?? 'image/jpeg' }),
       })
       if (!localRes.ok) {
-        const err = await localRes.text()
-        return res.status(502).json({ error: `Error modelo local: ${err}` })
+        console.error('[scan] modelo local error:', await localRes.text())
+        return res.status(502).json({ error: 'Error en modelo local' })
       }
       const result = await localRes.json()
       return res.status(200).json({
@@ -72,7 +81,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metodo_pago: metodoPago,
       })
     } catch (err: any) {
-      return res.status(502).json({ error: `No se pudo conectar con el modelo local: ${err.message}` })
+      console.error('[scan] modelo local fetch error:', err.message)
+      return res.status(504).json({ error: 'No se pudo conectar con el modelo local' })
     }
   }
 
@@ -82,6 +92,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser(token)
   if (authError || !user) return res.status(401).json({ error: 'Token inválido' })
+
+  // Rate limit: máx 10 escaneos por minuto por usuario
+  if (!checkRateLimit(user.id, 10)) {
+    return res.status(429).json({ error: 'Demasiadas peticiones. Espera un momento.' })
+  }
 
   const { image, metodo_pago, mimeType: mime } = req.body ?? {}
   if (!image) return res.status(400).json({ error: 'No se recibió imagen' })
@@ -96,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let rawText = ''
   try {
-    const ocrRes = await fetch('https://api.ocr.space/parse/image', {
+    const ocrRes = await fetchWithTimeout('https://api.ocr.space/parse/image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -109,19 +124,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     if (!ocrRes.ok) {
-      const err = await ocrRes.text()
-      return res.status(502).json({ error: `Error OCR.space: ${err}` })
+      console.error('[scan] OCR.space error:', await ocrRes.text())
+      return res.status(502).json({ error: 'Error al procesar imagen con OCR' })
     }
 
     const ocrData = await ocrRes.json()
 
     if (ocrData.IsErroredOnProcessing) {
-      return res.status(502).json({ error: `OCR.space: ${ocrData.ErrorMessage?.[0] ?? 'error desconocido'}` })
+      console.error('[scan] OCR.space processing error:', ocrData.ErrorMessage)
+      return res.status(502).json({ error: 'Error al procesar imagen con OCR' })
     }
 
     rawText = ocrData?.ParsedResults?.[0]?.ParsedText ?? ''
   } catch (err: any) {
-    return res.status(502).json({ error: `Fallo en OCR: ${err.message}` })
+    console.error('[scan] OCR fetch error:', err.message)
+    return res.status(504).json({ error: 'El servicio OCR no respondió a tiempo' })
   }
 
   if (!rawText.trim()) {
@@ -134,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let ocrResult: any
   try {
-    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+    const dsRes = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         Authorization:  `Bearer ${deepseekKey}`,
@@ -149,19 +166,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     if (!dsRes.ok) {
-      const err = await dsRes.text()
-      return res.status(502).json({ error: `Error DeepSeek: ${err}` })
+      console.error('[scan] DeepSeek error:', await dsRes.text())
+      return res.status(502).json({ error: 'Error al procesar el ticket' })
     }
 
     const raw = await dsRes.json()
     const text: string = raw?.choices?.[0]?.message?.content ?? ''
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return res.status(422).json({ error: 'DeepSeek no devolvió JSON válido', raw: text })
+    if (!jsonMatch) {
+      console.error('[scan] DeepSeek returned no JSON:', text)
+      return res.status(422).json({ error: 'No se pudo extraer la información del ticket' })
+    }
 
     ocrResult = JSON.parse(jsonMatch[0])
+
+    // Validar campos mínimos del resultado
+    if (!ocrResult.comercio || ocrResult.total == null) {
+      console.error('[scan] JSON schema incompleto:', ocrResult)
+      return res.status(422).json({ error: 'Extracción incompleta — revisa la imagen del ticket' })
+    }
   } catch (err: any) {
-    return res.status(502).json({ error: `Fallo en DeepSeek: ${err.message}` })
+    console.error('[scan] DeepSeek fetch error:', err.message)
+    return res.status(504).json({ error: 'El servicio de procesamiento no respondió a tiempo' })
   }
 
   return res.status(200).json({

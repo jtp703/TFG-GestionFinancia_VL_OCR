@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { notify } from '@/lib/toast'
 
 export interface GastoFijo {
   id:           string
@@ -65,7 +66,7 @@ export function useGastosFijos(): UseGastosFijosResult {
 
   async function crear(data: NuevoGasto): Promise<boolean> {
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return false
+    if (!session) { notify.err('Sin sesión activa'); return false }
     const { error } = await supabase.from('gasto_fijo').insert({
       usuario_id:   session.user.id,
       nombre:       data.nombre,
@@ -73,21 +74,24 @@ export function useGastosFijos(): UseGastosFijosResult {
       emoji:        data.emoji,
       categoria_id: data.categoria_id,
     })
-    if (error) return false
+    if (error) { notify.err('Error al crear el gasto fijo'); return false }
+    notify.ok('Gasto fijo creado')
     await cargar()
     return true
   }
 
   async function actualizar(id: string, data: Partial<NuevoGasto>): Promise<boolean> {
     const { error } = await supabase.from('gasto_fijo').update(data).eq('id', id)
-    if (error) return false
+    if (error) { notify.err('Error al actualizar el gasto fijo'); return false }
+    notify.ok('Gasto fijo actualizado')
     await cargar()
     return true
   }
 
   async function eliminar(id: string): Promise<boolean> {
     const { error } = await supabase.from('gasto_fijo').update({ activo: false }).eq('id', id)
-    if (error) return false
+    if (error) { notify.err('Error al eliminar el gasto fijo'); return false }
+    notify.ok('Gasto fijo eliminado')
     setGastosFijos(prev => prev.filter(g => g.id !== id))
     return true
   }

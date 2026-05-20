@@ -52,6 +52,7 @@ export function GastosFijosModal({ open, onClose, gastosFijos, categorias, onCre
   }
 
   async function handleEliminar(id: string) {
+    if (!window.confirm('¿Eliminar este gasto fijo?')) return
     setGuardando(true)
     await onEliminar(id)
     setGuardando(false)
@@ -228,7 +229,8 @@ export function GastosFijosModal({ open, onClose, gastosFijos, categorias, onCre
                 {/* Editar */}
                 <button
                   onClick={() => abrirEditar(g)}
-                  className="flex-shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-60"
+                  disabled={guardando}
+                  className="flex-shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-60 disabled:opacity-30"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -239,7 +241,8 @@ export function GastosFijosModal({ open, onClose, gastosFijos, categorias, onCre
                 {/* Eliminar */}
                 <button
                   onClick={() => handleEliminar(g.id)}
-                  className="flex-shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-60"
+                  disabled={guardando}
+                  className="flex-shrink-0 p-1.5 rounded-lg transition-opacity hover:opacity-60 disabled:opacity-30"
                   style={{ color: '#ef4444' }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

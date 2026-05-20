@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { Login } from '@/pages/Login'
 import { Registro } from '@/pages/Registro'
 import { Onboarding } from '@/pages/Onboarding'
@@ -31,6 +32,7 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Toaster position="bottom-center" richColors closeButton />
     </BrowserRouter>
   )
 }

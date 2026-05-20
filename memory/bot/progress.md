@@ -120,6 +120,24 @@
 **H1.6 PENDIENTE (U)**: relanzar Test A en Colab con gradio_demo.py
 **H7 (post-H6.8)**: anotar 30 tickets externos con Gemini → F1 holdout V5 vs Pipeline vs V4
 
+## 2026-05-14/18 — Despliegue inferencia local (AMD RX 6750 XT) ✅
+
+- Deploy completado y funcional: DeepSeek-OCR-2 + LoRA en AMD RX 6750 XT vía **torch-directml** (DirectX 12)
+- Entorno conda `deepseek-infer` (Python 3.11): torch 2.3.1+cpu, torch-directml 0.2.5, transformers==4.56.2
+- Solución clave: **monkey-patching de runtime** antes de importar transformers:
+  - `torch.cuda.is_bf16_supported = lambda: False` (evita AssertionError al importar modeling_deepseekocr2.py)
+  - `torch.Tensor.cuda` y `torch.nn.Module.cuda` redirigidos a `self.to(DEVICE)` (DirectML)
+- Servidor FastAPI `model_vs_model/server.py` → puerto 8000 (`/infer`, `/health`)
+- Integrado con Scannet: `local-dev-server.cjs` (puerto 3000) + Vite (puerto 5173)
+- `LOCAL_MODEL_URL=http://localhost:8000` en `.env.local` activa el modelo local
+- `eval_mode=True` en `model.infer()` — resuelve truncación del streaming JSON
+- Extracción JSON robusta: conteo de llaves en lugar de regex greedy
+- Documentación completa: `Documentacion/LocalDeploy.md`
+- **Limitación crítica**: LoRA NO se aplica a expertos MoE (PEFT no matchea nombres de capa de Unsloth)
+  - Warning: `target_parameters were set but no parameter was matched`
+  - El modelo corre como el base; fine-tuning sin efecto en las capas más importantes
+  - Fix pendiente: `merge_and_unload()` en Colab antes de descargar el modelo fusionado
+
 ## 2026-05-02 — V6 H4 completado (eval cuantitativo holdout)
 
 - Añadidas celdas R/S/T (parser, loop eval, tabla agregada), U (visualización), diagnóstico, V (inferencia OOD).

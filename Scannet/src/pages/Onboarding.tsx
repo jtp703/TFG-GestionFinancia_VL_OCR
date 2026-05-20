@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/hooks/useAuth'
+import { notify } from '@/lib/toast'
 
 interface GastoFijoOnboarding {
   nombre: string
@@ -83,7 +84,13 @@ export function Onboarding() {
         gasto_mensual_estimado: datos.gasto_mensual_estimado ? Number(datos.gasto_mensual_estimado) : null,
         ahorro_deseado:         datos.ahorro_deseado         ? Number(datos.ahorro_deseado)         : null,
       }).eq('id', uid)
-      if (profileError) console.error('[Onboarding] perfil_usuario update error:', profileError)
+      if (profileError) {
+        const msg = 'Error al guardar tu perfil. Inténtalo de nuevo.'
+        setErrorGuardado(msg)
+        notify.err(msg)
+        setGuardando(false)
+        return
+      }
 
       // Insertar gastos fijos en la tabla gasto_fijo para que aparezcan en el donut
       if (gastosFijos.length > 0) {
@@ -97,15 +104,17 @@ export function Onboarding() {
           }))
         )
         if (gastosError) {
-          console.error('[Onboarding] gasto_fijo insert error:', gastosError)
-          setErrorGuardado(`Error guardando gastos fijos: ${gastosError.message}`)
+          const msg = `Error al guardar gastos fijos: ${gastosError.message}`
+          setErrorGuardado(msg)
+          notify.err(msg)
           setGuardando(false)
           return
         }
       }
     } else {
-      console.error('[Onboarding] guardarYSalir llamado sin sesión activa')
-      setErrorGuardado('No hay sesión activa. Vuelve a iniciar sesión.')
+      const msg = 'No hay sesión activa. Vuelve a iniciar sesión.'
+      setErrorGuardado(msg)
+      notify.err(msg)
       setGuardando(false)
       return
     }

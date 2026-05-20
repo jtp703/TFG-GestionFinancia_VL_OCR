@@ -158,6 +158,17 @@ export function Scan() {
     )
   }
 
+  if (estado === 'guardando') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4"
+        style={{ color: 'var(--text-muted)' }}>
+        <div className="w-10 h-10 rounded-full border-4 animate-spin"
+          style={{ borderColor: 'var(--color-brand)', borderTopColor: 'transparent' }} />
+        <p className="text-sm">Guardando ticket…</p>
+      </div>
+    )
+  }
+
   // Estado IDLE — visor de cámara
   return (
     <div

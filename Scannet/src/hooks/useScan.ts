@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { notify } from '../lib/toast'
 
 export type MetodoPago = 'efectivo' | 'tarjeta'
 
@@ -18,7 +19,7 @@ export interface ResultadoOCR {
   metodo_pago: MetodoPago
 }
 
-type Estado = 'idle' | 'loading' | 'verify' | 'error' | 'success'
+type Estado = 'idle' | 'loading' | 'verify' | 'guardando' | 'error' | 'success'
 
 interface UseScanReturn {
   estado:        Estado
@@ -102,7 +103,9 @@ export function useScan(): UseScanReturn {
       // getSession puede lanzar si el refresh token es inválido
     }
     if (!session) {
-      setErrorMsg('Sesión expirada. Vuelve a iniciar sesión.')
+      const msg = 'Sesión expirada. Vuelve a iniciar sesión.'
+      setErrorMsg(msg)
+      notify.info(msg)
       setEstado('error')
       return
     }
@@ -137,7 +140,12 @@ export function useScan(): UseScanReturn {
       const data = await response.json()
 
       if (!response.ok) {
-        setErrorMsg(data.error ?? 'Error desconocido del servidor')
+        const msg = response.status === 401
+          ? 'Sesión expirada. Vuelve a iniciar sesión.'
+          : (data.error ?? 'Error desconocido del servidor')
+        if (response.status === 401) notify.info(msg)
+        else notify.err(msg)
+        setErrorMsg(msg)
         setEstado('error')
         return
       }
@@ -205,6 +213,7 @@ export function useScan(): UseScanReturn {
     }
 
     setDuplicado(false)
+    setEstado('guardando')
 
     // Categorizar el comercio vía DeepSeek (degradación suave si falla)
     let categoriaId: string | null = null
@@ -252,7 +261,9 @@ export function useScan(): UseScanReturn {
       .single()
 
     if (ticketError || !ticket) {
-      setErrorMsg(ticketError?.message ?? 'Error al guardar el ticket')
+      const msg = 'Error al guardar el ticket'
+      setErrorMsg(msg)
+      notify.err(msg)
       setEstado('error')
       return
     }
@@ -300,11 +311,13 @@ export function useScan(): UseScanReturn {
 
       if (tpError) {
         setErrorMsg(tpError.message)
+        notify.err('Error al guardar un producto del ticket')
         setEstado('error')
         return
       }
     }
 
+    notify.ok('Ticket guardado correctamente')
     setEstado('success')
   }
 
