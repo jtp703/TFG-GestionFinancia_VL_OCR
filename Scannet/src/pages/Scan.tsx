@@ -4,6 +4,28 @@ import { useScan } from '../hooks/useScan'
 import type { MetodoPago } from '../hooks/useScan'
 import VerifyForm from '../components/VerifyForm'
 
+function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.85)' }}
+      onClick={onClose}
+    >
+      <img
+        src={src}
+        alt="Ticket ampliado"
+        className="max-w-[92vw] max-h-[92vh] object-contain rounded-lg"
+        onClick={e => e.stopPropagation()}
+      />
+      <button
+        className="absolute top-4 right-4 text-white text-2xl leading-none"
+        onClick={onClose}
+        aria-label="Cerrar"
+      >×</button>
+    </div>
+  )
+}
+
 /** Vista de escaneo de tickets — máquina de estados: idle → loading → verify | error → success */
 export function Scan() {
   const navigate    = useNavigate()
@@ -12,8 +34,11 @@ export function Scan() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [camError, setCamError] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState(false)
+  const [panelActivo, setPanelActivo] = useState(0)
+  const carouselRef = useRef<HTMLDivElement>(null)
 
-  const { estado, resultado, errorMsg, duplicado, imagenPreview, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
+  const { estado, resultado, errorMsg, duplicado, imagenPreview, tiempoOCR, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
 
   // Iniciar cámara al montar (solo en estado idle)
   const startCamera = useCallback(async () => {
@@ -48,13 +73,13 @@ export function Scan() {
     }
   }, [stream])
 
-  // Redirigir a / tras guardar con éxito
+  // Redirigir a / tras guardar con éxito y limpiar contexto
   useEffect(() => {
     if (estado === 'success') {
-      const t = setTimeout(() => navigate('/'), 1500)
+      const t = setTimeout(() => { cancelar(); navigate('/') }, 1500)
       return () => clearTimeout(t)
     }
-  }, [estado, navigate])
+  }, [estado, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Captura un frame del video y lo envía como Blob */
   function capturar() {
@@ -96,29 +121,129 @@ export function Scan() {
 
   if (estado === 'verify' && resultado) {
     return (
-      <div className="pb-8 max-w-lg mx-auto">
-        {imagenPreview && (
-          <div className="w-full overflow-hidden" style={{ maxHeight: '220px', background: '#000' }}>
-            <img
-              src={imagenPreview}
-              alt="Ticket escaneado"
-              className="w-full object-contain"
-              style={{ maxHeight: '220px' }}
+      <>
+        {lightbox && imagenPreview && (
+          <Lightbox src={imagenPreview} onClose={() => setLightbox(false)} />
+        )}
+
+        {/* ── Escritorio (md+): imagen izquierda · formulario derecha ── */}
+        <div className="hidden md:flex h-full">
+          {/* Columna imagen — scrollable junto al form, click para ampliar */}
+          {imagenPreview && (
+            <div
+              className="w-[38%] flex-shrink-0 flex flex-col items-center justify-start p-4 overflow-y-auto cursor-zoom-in"
+              style={{ background: '#000', borderRight: '1px solid var(--border)' }}
+              onClick={() => setLightbox(true)}
+              title="Clic para ampliar"
+            >
+              <img
+                src={imagenPreview}
+                alt="Ticket escaneado"
+                className="w-full object-contain rounded"
+                style={{ maxHeight: '80vh' }}
+              />
+              <p className="text-xs mt-2 opacity-50 select-none" style={{ color: '#fff' }}>
+                Clic para ampliar
+              </p>
+            </div>
+          )}
+
+          {/* Columna formulario — scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex items-baseline gap-3 mb-4">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Verificar ticket
+              </h2>
+              {tiempoOCR !== null && (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Procesado en {tiempoOCR}s
+                </span>
+              )}
+            </div>
+            <VerifyForm
+              inicial={resultado}
+              duplicado={duplicado}
+              onConfirmar={guardar}
+              onCancelar={cancelar}
             />
           </div>
-        )}
-        <div className="p-4">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-            Verificar ticket
-          </h2>
-          <VerifyForm
-            inicial={resultado}
-            duplicado={duplicado}
-            onConfirmar={guardar}
-            onCancelar={cancelar}
-          />
         </div>
-      </div>
+
+        {/* ── Móvil: carrusel horizontal con scroll-snap ── */}
+        <div className="md:hidden flex flex-col" style={{ height: 'calc(100dvh - 64px - env(safe-area-inset-bottom, 8px))' }}>
+          <div
+            ref={carouselRef}
+            className="flex flex-1 overflow-x-auto overflow-y-hidden"
+            style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
+            onScroll={e => {
+              const el = e.currentTarget
+              setPanelActivo(el.scrollLeft > el.clientWidth / 2 ? 1 : 0)
+            }}
+          >
+            {/* Panel izquierda: imagen */}
+            <div className="flex-shrink-0 w-full flex flex-col" style={{ scrollSnapAlign: 'start' }}>
+              {imagenPreview
+                ? (
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: '#000' }}>
+                      <img
+                        src={imagenPreview}
+                        alt="Ticket escaneado"
+                        className="w-full object-contain"
+                        style={{ maxHeight: '70dvh' }}
+                      />
+                    </div>
+                  </div>
+                )
+                : (
+                  <div className="flex items-center justify-center h-40" style={{ background: 'var(--bg)' }}>
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin imagen</p>
+                  </div>
+                )
+              }
+            </div>
+
+            {/* Panel derecha: formulario */}
+            <div className="flex-shrink-0 w-full overflow-y-auto p-4 pb-8" style={{ scrollSnapAlign: 'start' }}>
+              <div className="flex items-baseline gap-3 mb-4">
+                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Verificar ticket
+                </h2>
+                {tiempoOCR !== null && (
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Procesado en {tiempoOCR}s
+                  </span>
+                )}
+              </div>
+              <VerifyForm
+                inicial={resultado}
+                duplicado={duplicado}
+                onConfirmar={guardar}
+                onCancelar={cancelar}
+              />
+            </div>
+          </div>
+
+          {/* Dots indicadores */}
+          <div className="flex justify-center gap-2 py-2" style={{ background: 'var(--bg)' }}>
+            {[0, 1].map(i => (
+              <button
+                key={i}
+                aria-label={i === 0 ? 'Imagen' : 'Formulario'}
+                onClick={() => {
+                  carouselRef.current?.scrollTo({ left: i * carouselRef.current.clientWidth, behavior: 'smooth' })
+                }}
+                className="rounded-full transition-all"
+                style={{
+                  width: panelActivo === i ? '20px' : '8px',
+                  height: '8px',
+                  background: panelActivo === i ? 'var(--color-brand)' : 'var(--border)',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </>
     )
   }
 

@@ -8,9 +8,11 @@ import { Scan } from '@/pages/Scan'
 import { Cuenta } from '@/pages/Cuenta'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/components/AppLayout'
+import { ScanProvider } from '@/context/ScanContext'
 
 function App() {
   return (
+    <ScanProvider>
     <BrowserRouter>
       <Routes>
         {/* Rutas públicas — sin layout */}
@@ -34,6 +36,7 @@ function App() {
       </Routes>
       <Toaster position="bottom-center" richColors closeButton />
     </BrowserRouter>
+    </ScanProvider>
   )
 }
 
