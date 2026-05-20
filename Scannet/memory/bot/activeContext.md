@@ -1,39 +1,43 @@
 ---
-Última actualización: 2026-04-16
+Última actualización: 2026-05-20
 ---
 
 ## Estado actual de Scannet
 
-- Fases 1–8.1 completadas al 100%
-- OCR: pipeline OCR.space + DeepSeek chat activo en producción (RunPod descartado)
-- Deploy: Vercel apunta a rama `Feature-App-Stack` como producción ✅
-- Fase 9 — QA y Deploy: **en curso**
+- **Rama activa:** `Feature-App-Stack-V6` → producción en Vercel
+- **Pipeline OCR:** OCR.space (texto) → DeepSeek chat (JSON). RunPod descartado.
+- **Pipeline completo (Fases A–G):** completado al 100% en sesión 2026-05-20
+- **Tests E2E:** 4 specs Playwright (`auth`, `scan`, `gastosFijos`, `home`)
+- **Estado general:** estable, sin bugs conocidos críticos
 
-## Completado hoy (2026-04-16)
+## Lo que existe ahora mismo
 
-- Fix onboarding gastos fijos: el paso 3 ahora pide nombre + precio por cada gasto y los inserta en `gasto_fijo` (antes guardaba texto plano en `perfil_usuario.gastos_fijos` y nunca aparecían en el donut) ✅
+### Arquitectura de estado del scan
+- `ScanContext.tsx` (`src/context/ScanContext.tsx`) — todo el estado del scan vive en un React Context global que persiste entre navegaciones. Si el usuario escanea un ticket y cambia de pestaña, al volver los datos siguen ahí.
+- `useScan.ts` — ahora es un re-export de `ScanContext`. Los imports existentes siguen funcionando sin cambios.
+- `ScanProvider` envuelve todo el árbol en `App.tsx`.
 
-## Completado (2026-04-12)
+### Pipeline scan completo
+1. Usuario captura con cámara o galería
+2. Imagen comprimida (máx 1200px, quality 0.82) → base64
+3. `POST /api/scan` → OCR.space extrae texto → DeepSeek chat parsea a JSON
+4. Validación de schema (comercio + total requeridos)
+5. Estado `verify` → VerifyForm editable
+6. Validación de formulario (comercio, fecha, total > 0, items válidos) antes de confirmar
+7. Dialog de confirmación "¿Todo es correcto?"
+8. `POST /api/categorize` → categoría asignada (degradación suave)
+9. INSERT en `ticket` + `producto` + `ticket_producto`
+10. `notify.ok('Ticket guardado')` + redirect a `/`
 
-- `USE_MOCK = false` en `useTickets.ts` — donut ahora consulta Supabase real ✅
-- try/catch en `getSession()` de `useTickets.ts` — evita hook colgado con token inválido ✅
+### UX verify (post-OCR)
+- **Escritorio:** imagen izquierda (38%, click-to-zoom lightbox) + formulario derecha (scrollable)
+- **Móvil:** carrusel scroll-snap horizontal, dots indicadores (pill animado), panel imagen | panel form
+- Timer de procesamiento: "Procesado en Xs" junto al título
+- Errores de guardado → vuelven a `verify` con datos intactos (no relanza OCR)
 
-## Bloqueado ahora mismo
+## Próximos pasos posibles
 
-- **Bucket `tickets` en Supabase Storage**: pendiente crear **manualmente**
-  Dashboard → Storage → New bucket → nombre: `tickets` → Private
-- **RLS policy INSERT Storage**: añadir tras crear el bucket
-  ```sql
-  (bucket_id = 'tickets') AND (auth.uid()::text = (storage.foldername(name))[1])
-  ```
-
-## Próximos pasos
-
-1. Usuario crea bucket + RLS policy en Supabase (manual, tareas 9.1 y 9.2)
-2. Verificar que `/api/tickets` devuelve datos reales tras desplegar (tarea 9.5)
-3. Test e2e: escanear → verificar → guardar → ver en donut (tarea 9.6)
-4. Evaluar calidad OCR.space (tarea 9.7)
-
-## Rama activa
-
-`Feature-App-Stack` → producción en Vercel. Nunca a `main`.
+- Probar en local el flujo completo con `vercel dev` (necesita `.env.local` con las keys reales)
+- Ejecutar tests E2E: `npm run test:e2e` (necesita cuenta de test `test-e2e@scannet.dev`)
+- Verificar bucket `tickets` en Supabase Storage si no se creó aún (privado + RLS policy)
+- Evaluar calidad OCR en tickets reales y ajustar prompt DeepSeek si hay campos que fallan
