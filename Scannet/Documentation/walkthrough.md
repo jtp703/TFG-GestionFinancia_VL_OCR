@@ -652,3 +652,39 @@ Rediseño del modelo de datos de productos para evitar duplicados en el catálog
 **Motivación:** Los valores introducidos en el onboarding pueden cambiar con el tiempo.
 **Impacto:** Medio — mejora la usabilidad del perfil.
 **Requisitos técnicos:** Formulario editable en `Cuenta.tsx`; PATCH a `perfil_usuario`.
+
+---
+
+## Fase 10 — Admin Dashboard + Consentimiento de Entrenamiento (2026-05-25)
+
+### Qué se hizo
+
+**Rol administrador:**
+- Migración SQL (`database/migration_admin_consent.sql`): columna `role TEXT DEFAULT 'user'` en `perfil_usuario` y columna `consentimiento_entrenamiento BOOLEAN DEFAULT NULL` en `ticket`.
+- 3 endpoints Vercel Function bajo `api/admin/`: `users.ts`, `tickets.ts`, `export.ts`. Todos verifican Bearer token + `role='admin'` antes de operar.
+- `useAdminData.ts`: hook que orquesta las llamadas admin (lista usuarios, tickets por usuario, descarga JSONL).
+- `AdminPanel.tsx`: componente con lista de usuarios expandible, tabla de tickets con JSON colapsable, y botón de exportación. Solo visible en `Cuenta.tsx` si `perfil.role === 'admin'`.
+- `usePerfil.ts` ampliado para incluir el campo `role` en el SELECT.
+- `Cuenta.tsx` reorganizado en dos contenedores: `max-w-sm` para ajustes de cuenta, `max-w-4xl` para el panel admin.
+
+**Consentimiento de entrenamiento:**
+- `ConsentDialog.tsx`: dialog post-scan. Aparece tras guardar un ticket exitosamente.
+- `ScanContext.tsx`: estado `consent` añadido a la máquina de estados; `ticketGuardadoId` se rellena al guardar y se expone en el context.
+- `Scan.tsx`: renderiza `<ConsentDialog>` cuando `estado === 'consent'`; al responder llama `cancelar()` + `navigate('/')`.
+
+### Decisiones tomadas
+
+- **Seguridad admin vía service_role**: las rutas admin usan `SUPABASE_SERVICE_ROLE_KEY` server-side (bypass RLS). El frontend nunca accede a datos de otros usuarios directamente.
+- **Signed URLs para export**: las imágenes del JSONL exportado incluyen signed URLs de 7 días. El admin puede descargar el JSONL y luego las imágenes por separado con scripts.
+- **Consentimiento opcional**: `null` = no preguntado aún, `true` = acepta, `false` = rechaza (aunque el dialog no setea `false`, deja `null`). Solo los `true` se incluyen en el export por defecto.
+- **Layout admin desacoplado**: `AdminPanel` renderiza fuera del `max-w-sm` de ajustes de cuenta para dar espacio a las tablas.
+
+### Cómo probar
+
+1. **Migración**: ejecutar `database/migration_admin_consent.sql` en Supabase SQL Editor.
+2. **Crear admin**: `UPDATE perfil_usuario SET role = 'admin' WHERE id = '<tu-uuid>';`
+3. **Panel admin**: login con el admin → ir a Cuenta → verificar que aparece "Panel de Administración" con lista de usuarios.
+4. **Expandir usuario**: click en un usuario → ver sus tickets con columna JSON.
+5. **Exportar**: click "Exportar dataset (N)" → descarga `scannet_export_YYYY-MM-DD.jsonl`.
+6. **Consentimiento**: escanear un ticket → verificar → guardar → aparece el ConsentDialog → "Sí, contribuir" → verificar en Supabase que `consentimiento_entrenamiento = true`.
+7. **Seguridad**: como usuario normal, llamar a `/api/admin/users` con su token → debe devolver 403.

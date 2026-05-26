@@ -19,21 +19,22 @@ export interface ResultadoOCR {
   metodo_pago: MetodoPago
 }
 
-type Estado = 'idle' | 'loading' | 'verify' | 'guardando' | 'error' | 'success'
+type Estado = 'idle' | 'loading' | 'verify' | 'guardando' | 'consent' | 'error' | 'success'
 
 interface ScanState {
-  estado:        Estado
-  resultado:     ResultadoOCR | null
-  errorMsg:      string | null
-  duplicado:     boolean
-  imagenPreview: string | null
-  tiempoOCR:     number | null
-  metodoPago:    MetodoPago
-  setMetodoPago: (m: MetodoPago) => void
-  enviar:        (imageBlob: Blob) => Promise<void>
-  guardar:       (datos: ResultadoOCR) => Promise<void>
-  reintentar:    () => void
-  cancelar:      () => void
+  estado:           Estado
+  resultado:        ResultadoOCR | null
+  errorMsg:         string | null
+  duplicado:        boolean
+  imagenPreview:    string | null
+  tiempoOCR:        number | null
+  metodoPago:       MetodoPago
+  ticketGuardadoId: string | null
+  setMetodoPago:    (m: MetodoPago) => void
+  enviar:           (imageBlob: Blob) => Promise<void>
+  guardar:          (datos: ResultadoOCR) => Promise<void>
+  reintentar:       () => void
+  cancelar:         () => void
 }
 
 const ScanContext = createContext<ScanState | null>(null)
@@ -57,13 +58,14 @@ async function comprimirImagen(blob: Blob, maxPx = 1200, quality = 0.82): Promis
 }
 
 export function ScanProvider({ children }: { children: ReactNode }) {
-  const [estado, setEstado]               = useState<Estado>('idle')
-  const [resultado, setResultado]         = useState<ResultadoOCR | null>(null)
-  const [errorMsg, setErrorMsg]           = useState<string | null>(null)
-  const [duplicado, setDuplicado]         = useState(false)
-  const [imagenPreview, setImagenPreview] = useState<string | null>(null)
-  const [tiempoOCR, setTiempoOCR]         = useState<number | null>(null)
-  const [metodoPago, setMetodoPago]       = useState<MetodoPago>('efectivo')
+  const [estado, setEstado]                     = useState<Estado>('idle')
+  const [resultado, setResultado]               = useState<ResultadoOCR | null>(null)
+  const [errorMsg, setErrorMsg]                 = useState<string | null>(null)
+  const [duplicado, setDuplicado]               = useState(false)
+  const [imagenPreview, setImagenPreview]       = useState<string | null>(null)
+  const [tiempoOCR, setTiempoOCR]               = useState<number | null>(null)
+  const [metodoPago, setMetodoPago]             = useState<MetodoPago>('efectivo')
+  const [ticketGuardadoId, setTicketGuardadoId] = useState<string | null>(null)
   // useRef so the blob survives navigation without re-renders
   const ultimaImagenRef = useRef<Blob | null>(null)
 
@@ -229,7 +231,18 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     // Filtrar productos con descripción vacía o cantidad inválida antes de insertar
     const itemsValidos = datos.items.filter(i => i.descripcion.trim() && i.cantidad > 0)
 
-    for (const item of itemsValidos) {
+    // Agregar líneas duplicadas (mismo descripcion+precio): la UNIQUE en ticket_producto
+    // impide dos filas con el mismo (ticket_id, producto_id), así que sumamos cantidades.
+    const itemsAgregados = Object.values(
+      itemsValidos.reduce<Record<string, ProductoOCR>>((acc, item) => {
+        const key = `${item.descripcion.trim().toLowerCase()}|${item.precio}`
+        if (acc[key]) acc[key].cantidad += item.cantidad
+        else acc[key] = { ...item, descripcion: item.descripcion.trim() }
+        return acc
+      }, {})
+    )
+
+    for (const item of itemsAgregados) {
       const { data: existente } = await supabase
         .from('producto').select('id')
         .ilike('descripcion', item.descripcion).eq('precio_unitario', item.precio).maybeSingle()
@@ -252,7 +265,8 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     }
 
     notify.ok('Ticket guardado correctamente')
-    setEstado('success')
+    setTicketGuardadoId(ticket.id)
+    setEstado('consent')
   }
 
   function reintentar() {
@@ -264,13 +278,13 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     setEstado('idle'); setResultado(null); setErrorMsg(null); setDuplicado(false)
     ultimaImagenRef.current = null
     setImagenPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null })
-    setTiempoOCR(null)
+    setTiempoOCR(null); setTicketGuardadoId(null)
   }
 
   return (
     <ScanContext.Provider value={{
       estado, resultado, errorMsg, duplicado, imagenPreview, tiempoOCR,
-      metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar,
+      metodoPago, ticketGuardadoId, setMetodoPago, enviar, guardar, reintentar, cancelar,
     }}>
       {children}
     </ScanContext.Provider>

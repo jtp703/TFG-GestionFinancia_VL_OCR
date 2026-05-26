@@ -17,7 +17,8 @@
 | 7 | Categorización | ✅ |
 | 8 | Cuenta | ✅ |
 | 8.1 | Mejoras pre-deploy | ✅ |
-| 9 | QA y Deploy | ⏳ En curso |
+| 9 | QA y Deploy | ✅ |
+| 10 | Admin + Consentimiento | ✅ 2026-05-25 |
 
 ---
 

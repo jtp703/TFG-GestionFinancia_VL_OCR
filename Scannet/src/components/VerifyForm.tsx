@@ -2,35 +2,39 @@ import { useState, useEffect, useRef } from 'react'
 import type { ResultadoOCR, ProductoOCR, MetodoPago } from '../hooks/useScan'
 import { notify } from '../lib/toast'
 
+export interface VerifyFormState {
+  comercio: string
+  fecha:    string
+  metodo:   MetodoPago
+  items:    ProductoOCR[]
+}
+
 interface Props {
   inicial:     ResultadoOCR
   duplicado:   boolean
+  state:       VerifyFormState
+  setState:    React.Dispatch<React.SetStateAction<VerifyFormState>>
   onConfirmar: (datos: ResultadoOCR) => Promise<void>
   onCancelar:  () => void
 }
 
 /** Tabla de verificación editable post-OCR */
-export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar }: Props) {
+export default function VerifyForm({ inicial, duplicado, state, setState, onConfirmar, onCancelar }: Props) {
   const [guardando, setGuardando]         = useState(false)
   const [confirmando, setConfirmando]     = useState(false)
   const [intentoGuardar, setIntentoGuardar] = useState(false)
-  const [comercio, setComercio]           = useState(inicial.comercio)
   const topRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
-  function toInputDate(f: string): string {
-    const dateOnly = f.split('T')[0].split(' ')[0].trim()
-    const parts = dateOnly.split('/')
-    if (parts.length === 3 && parts[0].length === 2) return `${parts[2]}-${parts[1]}-${parts[0]}`
-    return dateOnly
-  }
-
-  const [fecha, setFecha]   = useState(toInputDate(inicial.fecha))
-  const [metodo, setMetodo] = useState<MetodoPago>(inicial.metodo_pago)
-  const [items, setItems]   = useState<ProductoOCR[]>(inicial.items)
+  const { comercio, fecha, metodo, items } = state
+  const setComercio = (v: string)     => setState(s => ({ ...s, comercio: v }))
+  const setFecha    = (v: string)     => setState(s => ({ ...s, fecha: v }))
+  const setMetodo   = (v: MetodoPago) => setState(s => ({ ...s, metodo: v }))
+  const setItems    = (updater: (prev: ProductoOCR[]) => ProductoOCR[]) =>
+    setState(s => ({ ...s, items: updater(s.items) }))
 
   const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
 

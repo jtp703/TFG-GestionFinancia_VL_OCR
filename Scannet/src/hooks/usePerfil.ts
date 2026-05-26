@@ -5,6 +5,7 @@ interface Perfil {
   gasto_mensual_estimado: number | null
   ahorro_deseado:         number | null
   gastos_fijos:           string | null
+  role:                   'user' | 'admin'
 }
 
 interface UsePerfilResult {
@@ -24,7 +25,7 @@ export function usePerfil(): UsePerfilResult {
 
       const { data } = await supabase
         .from('perfil_usuario')
-        .select('gasto_mensual_estimado, ahorro_deseado, gastos_fijos')
+        .select('gasto_mensual_estimado, ahorro_deseado, gastos_fijos, role')
         .eq('id', session.user.id)
         .single()
 

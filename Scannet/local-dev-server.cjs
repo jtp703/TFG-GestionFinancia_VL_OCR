@@ -198,6 +198,114 @@ Responde únicamente con el nombre de la categoría, sin explicación ni puntuac
   }
 }
 
+async function ensureAdmin(token) {
+  if (!token) return { ok: false, status: 401, error: 'No autorizado' }
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+  if (authError || !user) return { ok: false, status: 401, error: 'Token inválido' }
+  const { data: perfil } = await supabase.from('perfil_usuario').select('role').eq('id', user.id).single()
+  if (perfil?.role !== 'admin') return { ok: false, status: 403, error: 'Acceso denegado' }
+  return { ok: true, user }
+}
+
+async function handleAdminUsers(req, res, token) {
+  const check = await ensureAdmin(token)
+  if (!check.ok) return send(res, check.status, { error: check.error })
+
+  const { data: perfiles, error: perfilesError } = await supabase
+    .from('perfil_usuario').select('id, role, created_at').order('created_at', { ascending: false })
+  if (perfilesError) return send(res, 500, { error: perfilesError.message })
+
+  const { data: authUsers, error: authUsersError } = await supabase.auth.admin.listUsers()
+  if (authUsersError) return send(res, 500, { error: authUsersError.message })
+
+  const emailMap = {}
+  for (const u of authUsers.users) emailMap[u.id] = u.email ?? ''
+
+  const { data: ticketCounts } = await supabase.from('ticket').select('usuario_id, consentimiento_entrenamiento')
+  const countMap = {}
+  for (const t of ticketCounts ?? []) {
+    if (!countMap[t.usuario_id]) countMap[t.usuario_id] = { total: 0, consented: 0 }
+    countMap[t.usuario_id].total++
+    if (t.consentimiento_entrenamiento === true) countMap[t.usuario_id].consented++
+  }
+
+  const users = (perfiles ?? []).map(p => ({
+    id:              p.id,
+    email:           emailMap[p.id] ?? '',
+    role:            p.role,
+    created_at:      p.created_at,
+    ticket_count:    countMap[p.id]?.total    ?? 0,
+    consented_count: countMap[p.id]?.consented ?? 0,
+  }))
+
+  return send(res, 200, { users })
+}
+
+async function handleAdminTickets(req, res, token, query) {
+  const check = await ensureAdmin(token)
+  if (!check.ok) return send(res, check.status, { error: check.error })
+
+  const userId = query.userId
+  if (!userId) return send(res, 400, { error: 'userId requerido' })
+
+  const { data: tickets, error } = await supabase
+    .from('ticket')
+    .select('id, comercio, fecha, metodo_pago, verificado, json_extraido, imagen_url, consentimiento_entrenamiento, timestamp')
+    .eq('usuario_id', userId).order('timestamp', { ascending: false })
+  if (error) return send(res, 500, { error: error.message })
+  return send(res, 200, { tickets: tickets ?? [] })
+}
+
+async function handleAdminExport(req, res, token, query) {
+  const check = await ensureAdmin(token)
+  if (!check.ok) return send(res, check.status, { error: check.error })
+
+  const onlyConsented = query.onlyConsented !== 'false'
+  const SIGNED_URL_EXPIRY = 60 * 60 * 24 * 7
+
+  let q = supabase.from('ticket')
+    .select('id, usuario_id, comercio, fecha, json_extraido, imagen_url, consentimiento_entrenamiento, timestamp')
+    .eq('verificado', true).order('timestamp', { ascending: true })
+  if (onlyConsented) q = q.eq('consentimiento_entrenamiento', true)
+
+  const { data: tickets, error } = await q
+  if (error) return send(res, 500, { error: error.message })
+
+  // Marcar tickets exportados como consumidos (consent=false) — extracción única.
+  if (onlyConsented && tickets && tickets.length > 0) {
+    const ids = tickets.map(t => t.id)
+    await supabase.from('ticket').update({ consentimiento_entrenamiento: false }).in('id', ids)
+  }
+
+  const lines = []
+  for (const ticket of tickets ?? []) {
+    let imageUrl = ''
+    if (ticket.imagen_url) {
+      const { data: signed } = await supabase.storage.from('tickets').createSignedUrl(ticket.imagen_url, SIGNED_URL_EXPIRY)
+      imageUrl = signed?.signedUrl ?? ''
+    }
+    const groundTruth = ticket.json_extraido ? JSON.stringify(ticket.json_extraido) : ''
+    lines.push(JSON.stringify({
+      image_url:                    imageUrl,
+      image_path:                   ticket.imagen_url ?? '',
+      ground_truth:                 groundTruth,
+      usuario_id:                   ticket.usuario_id,
+      comercio:                     ticket.comercio ?? '',
+      fecha:                        ticket.fecha ?? '',
+      consentimiento_entrenamiento: ticket.consentimiento_entrenamiento,
+      timestamp:                    ticket.timestamp,
+    }))
+  }
+
+  const fecha = new Date().toISOString().split('T')[0]
+  res.writeHead(200, {
+    'Content-Type':                'application/x-ndjson',
+    'Content-Disposition':         `attachment; filename="scannet_export_${fecha}.jsonl"`,
+    'Access-Control-Allow-Origin': '*',
+  })
+  res.end(lines.join('\n'))
+}
+
 // ── Servidor principal ────────────────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
@@ -207,9 +315,11 @@ const server = http.createServer(async (req, res) => {
     return res.end()
   }
 
-  const pathname    = url.parse(req.url).pathname
-  const authHeader  = req.headers.authorization ?? ''
-  const token       = authHeader.replace('Bearer ', '')
+  const parsed     = url.parse(req.url, true)
+  const pathname   = parsed.pathname
+  const query      = parsed.query
+  const authHeader = req.headers.authorization ?? ''
+  const token      = authHeader.replace('Bearer ', '')
 
   try {
     if (req.method === 'POST' && pathname === '/api/scan') {
@@ -222,6 +332,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/categorize') {
       const body = await readBody(req)
       return handleCategorize(req, res, body, token)
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/users') {
+      return handleAdminUsers(req, res, token)
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/tickets') {
+      return handleAdminTickets(req, res, token, query)
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/export') {
+      return handleAdminExport(req, res, token, query)
     }
     send(res, 404, { error: 'Ruta no encontrada' })
   } catch (err) {

@@ -2,7 +2,15 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useScan } from '../hooks/useScan'
 import type { MetodoPago } from '../hooks/useScan'
-import VerifyForm from '../components/VerifyForm'
+import VerifyForm, { type VerifyFormState } from '../components/VerifyForm'
+import { ConsentDialog } from '../components/ConsentDialog'
+
+function toInputDate(f: string): string {
+  const dateOnly = f.split('T')[0].split(' ')[0].trim()
+  const parts = dateOnly.split('/')
+  if (parts.length === 3 && parts[0].length === 2) return `${parts[2]}-${parts[1]}-${parts[0]}`
+  return dateOnly
+}
 
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
@@ -38,7 +46,23 @@ export function Scan() {
   const [panelActivo, setPanelActivo] = useState(0)
   const carouselRef = useRef<HTMLDivElement>(null)
 
-  const { estado, resultado, errorMsg, duplicado, imagenPreview, tiempoOCR, metodoPago, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
+  const { estado, resultado, errorMsg, duplicado, imagenPreview, tiempoOCR, metodoPago, ticketGuardadoId, setMetodoPago, enviar, guardar, reintentar, cancelar } = useScan()
+
+  // Estado del formulario de verificación elevado al padre para que ambos VerifyForm
+  // (móvil y escritorio) compartan los cambios y no se pierdan al cruzar el breakpoint.
+  const [verifyState, setVerifyState] = useState<VerifyFormState | null>(null)
+  useEffect(() => {
+    if (resultado) {
+      setVerifyState({
+        comercio: resultado.comercio,
+        fecha:    toInputDate(resultado.fecha),
+        metodo:   resultado.metodo_pago,
+        items:    resultado.items,
+      })
+    } else {
+      setVerifyState(null)
+    }
+  }, [resultado])
 
   // Iniciar cámara al montar (solo en estado idle)
   const startCamera = useCallback(async () => {
@@ -73,7 +97,7 @@ export function Scan() {
     }
   }, [stream])
 
-  // Redirigir a / tras guardar con éxito y limpiar contexto
+  // Redirigir a / tras guardar (estado success ya no se usa, pero se mantiene por seguridad)
   useEffect(() => {
     if (estado === 'success') {
       const t = setTimeout(() => { cancelar(); navigate('/') }, 1500)
@@ -108,6 +132,20 @@ export function Scan() {
 
   // --- Render por estado ---
 
+  if (estado === 'consent' && ticketGuardadoId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-6"
+        style={{ color: 'var(--text-primary)' }}>
+        <div className="text-5xl">✓</div>
+        <p className="text-lg font-medium">Ticket guardado</p>
+        <ConsentDialog
+          ticketId={ticketGuardadoId}
+          onDone={() => { cancelar(); navigate('/') }}
+        />
+      </div>
+    )
+  }
+
   if (estado === 'success') {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-6"
@@ -119,7 +157,7 @@ export function Scan() {
     )
   }
 
-  if (estado === 'verify' && resultado) {
+  if (estado === 'verify' && resultado && verifyState) {
     return (
       <>
         {lightbox && imagenPreview && (
@@ -163,6 +201,8 @@ export function Scan() {
             <VerifyForm
               inicial={resultado}
               duplicado={duplicado}
+              state={verifyState}
+              setState={setVerifyState as React.Dispatch<React.SetStateAction<VerifyFormState>>}
               onConfirmar={guardar}
               onCancelar={cancelar}
             />
@@ -218,6 +258,8 @@ export function Scan() {
               <VerifyForm
                 inicial={resultado}
                 duplicado={duplicado}
+                state={verifyState}
+                setState={setVerifyState as React.Dispatch<React.SetStateAction<VerifyFormState>>}
                 onConfirmar={guardar}
                 onCancelar={cancelar}
               />

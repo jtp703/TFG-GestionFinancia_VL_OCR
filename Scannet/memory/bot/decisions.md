@@ -60,6 +60,15 @@ Dos capas de validación:
 - Dialog de confirmación antes de guardar: muestra comercio, fecha, método y total
 - Timer: `tiempoOCR` en context, se muestra "Procesado en Xs" en el header de verify
 
+## Admin y consentimiento (2026-05-25)
+
+- **Role en BD**: `perfil_usuario.role TEXT DEFAULT 'user'`. Valores: `'user' | 'admin'`. Sin tabla roles separada (MVP).
+- **Seguridad admin**: rutas `api/admin/*.ts` usan `SUPABASE_SERVICE_ROLE_KEY` (bypass RLS). Doble check: Bearer token válido + `role='admin'` en BD. El frontend NUNCA accede a datos de otros usuarios.
+- **Consentimiento en ticket**: `ticket.consentimiento_entrenamiento BOOLEAN DEFAULT NULL`. `null`=no respondido, `true`=acepta. El dialog no setea `false` — rechazar deja `null` (privacidad por defecto).
+- **Export JSONL**: incluye `image_url` (signed URL 7 días), `image_path` (ruta storage), `ground_truth` (JSON stringificado). Filtro `onlyConsented=true` por defecto.
+- **ConsentDialog**: aparece en estado `consent` de la máquina de estados scan, antes del redirect. El usuario siempre puede responder "No, gracias" sin penalización.
+- **Layout admin en Cuenta**: `max-w-4xl mx-auto` separado del `max-w-sm` de ajustes de cuenta (la tabla de tickets necesita ancho).
+
 ## Seguridad API
 
 - Rate limiting en memoria (Map): suficiente para Vercel serverless individual, no distribuido

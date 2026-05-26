@@ -40,8 +40,19 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-BASE_MODEL   = r"F:\Model_Local_inference\models\deepseek_ocr2_base"
-LORA_ADAPTER = r"F:\Model_Local_inference\models\deepseek_ocr2_lora"
+MODELS_DIR = r"F:\Model_Local_inference\models"
+BASE_MODEL = os.path.join(MODELS_DIR, "deepseek_ocr2_base")
+
+# Selecciona versión con LORA_VERSION=orig|v4|v5 (por defecto v5)
+LORA_VERSION = os.environ.get("LORA_VERSION", "orig")
+_ADAPTER_MAP = {
+    "orig": os.path.join(MODELS_DIR, "deepseek_ocr2_orig"),
+    "v4":   os.path.join(MODELS_DIR, "deepseek_ocr2_v4"),
+    "v5":   os.path.join(MODELS_DIR, "deepseek_ocr2_v5"),
+}
+if LORA_VERSION not in _ADAPTER_MAP:
+    raise ValueError(f"LORA_VERSION='{LORA_VERSION}' no reconocida. Usa: orig, v4, v5")
+LORA_ADAPTER = _ADAPTER_MAP[LORA_VERSION]
 
 PROMPT = """<image>
 
@@ -72,6 +83,7 @@ _tokenizer = None
 
 def load_model():
     global _model, _tokenizer
+    print(f"[INFO] Versión LoRA: {LORA_VERSION.upper()}  ({LORA_ADAPTER})")
     print("[INFO] Cargando modelo base...")
     _model = AutoModel.from_pretrained(BASE_MODEL, trust_remote_code=True, torch_dtype=torch.float16)
     print("[INFO] Aplicando adaptador LoRA...")
@@ -79,7 +91,7 @@ def load_model():
     _model = _model.to(DEVICE)
     _model.eval()
     _tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, trust_remote_code=True)
-    print("[INFO] Modelo listo.")
+    print(f"[INFO] Modelo {LORA_VERSION.upper()} listo.")
 
 
 @asynccontextmanager
@@ -166,7 +178,7 @@ def _run_inference(image_path: str) -> dict | None:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "device": str(DEVICE)}
+    return {"status": "ok", "device": str(DEVICE), "lora_version": LORA_VERSION}
 
 
 @app.post("/infer")
