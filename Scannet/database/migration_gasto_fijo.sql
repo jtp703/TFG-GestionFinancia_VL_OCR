@@ -1,9 +1,3 @@
--- ============================================================
--- MIGRACIÓN: tabla gasto_fijo
--- Ejecutar en: Supabase Dashboard > SQL Editor
--- Fecha: 2026-04-12
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS gasto_fijo (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   usuario_id   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

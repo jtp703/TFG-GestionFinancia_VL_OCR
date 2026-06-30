@@ -59,7 +59,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const ticket of tickets ?? []) {
     let imageUrl = ''
 
-    // Generar signed URL si hay imagen en storage
     if (ticket.imagen_url) {
       const { data: signed } = await supabaseAdmin.storage
         .from('tickets')
