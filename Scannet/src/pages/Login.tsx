@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { notify } from '@/lib/toast'
 
 /** Pantalla de inicio de sesión. Sin barra de navegación. Card centrada máx. 400px. */
 export function Login() {
@@ -20,7 +21,11 @@ export function Login() {
     const { error } = await signIn(email, password)
 
     if (error) {
-      setError('Email o contraseña incorrectos')
+      const msg = error.status === 400
+        ? 'Email o contraseña incorrectos'
+        : 'Error del servidor. Inténtalo de nuevo.'
+      setError(msg)
+      notify.err(msg)
       setLoading(false)
       return
     }

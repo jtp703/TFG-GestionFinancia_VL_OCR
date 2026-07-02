@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { usePerfil } from '../hooks/usePerfil'
+import { AdminPanel } from '../components/AdminPanel'
 
 /** Devuelve las 2 primeras iniciales de un email */
 function initials(email: string): string {
@@ -10,10 +12,11 @@ function initials(email: string): string {
   return parts.slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?'
 }
 
-/** Vista de cuenta: avatar, email, toggle de tema y logout */
+/** Vista de cuenta: avatar, email, toggle de tema, logout y panel admin (si procede) */
 export function Cuenta() {
   const { user, signOut }   = useAuth()
   const { theme, toggle }   = useTheme()
+  const { perfil }          = usePerfil()
   const navigate            = useNavigate()
   const [modal, setModal]   = useState(false)
 
@@ -25,7 +28,8 @@ export function Cuenta() {
   const email = user?.email ?? ''
 
   return (
-    <div className="p-6 max-w-sm mx-auto space-y-6" style={{ color: 'var(--text-primary)' }}>
+    <div className="p-6 space-y-6" style={{ color: 'var(--text-primary)' }}>
+    <div className="max-w-sm mx-auto space-y-6">
 
       {/* Avatar + email */}
       <div className="flex flex-col items-center gap-3 pt-4">
@@ -127,6 +131,15 @@ export function Cuenta() {
           </div>
         </div>
       )}
+    </div>
+
+    {/* Panel de administración — ancho completo, solo visible para admins */}
+    {perfil?.role === 'admin' && (
+      <div className="max-w-4xl mx-auto">
+        <div style={{ borderTop: '1px solid var(--border)', marginBottom: '1.5rem' }} />
+        <AdminPanel />
+      </div>
+    )}
     </div>
   )
 }

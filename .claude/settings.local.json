@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\Jonni\\\\Documents\\\\DRA-WORKSPACE\\\\TFG\\\\DataAugmentation\\\\imagenes\\\\dataset_total.jsonl\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\Jonni\\\\Documents\\\\DRA-WORKSPACE\\\\TFG\\\\DataAugmentation\\\\imagenes\\\\dataset_golden.jsonl\" | Measure-Object -Line\\).Lines)",
+      "Bash(python *)",
+      "Bash(code --version)",
+      "Bash(git *)"
+    ]
+  }
+}

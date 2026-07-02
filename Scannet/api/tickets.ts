@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
   const to   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-  // Consultar tickets con productos y categoría
+  // Consultar tickets con productos (vía ticket_producto) y categoría
   const { data: tickets, error } = await supabase
     .from('ticket')
     .select(`
@@ -35,7 +35,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       metodo_pago,
       verificado,
       categoria:categoria_id ( id, nombre ),
-      productos:producto ( id, descripcion, cantidad, precio_unitario, precio_total )
+      lineas:ticket_producto (
+        id,
+        cantidad,
+        precio_total,
+        producto:producto_id ( id, descripcion, precio_unitario )
+      )
     `)
     .eq('usuario_id', user.id)
     .gte('fecha', from)
@@ -44,13 +49,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (error) return res.status(500).json({ error: error.message })
 
-  // Calcular total por ticket (suma de productos) y total global del mes
+  // Aplanar lineas al formato Producto esperado por el frontend y calcular totales
   const ticketsConTotal = (tickets ?? []).map((t: any) => {
-    const total = (t.productos ?? []).reduce(
+    const productos = (t.lineas ?? []).map((l: any) => ({
+      id:              l.producto?.id ?? l.id,
+      descripcion:     l.producto?.descripcion ?? '',
+      cantidad:        l.cantidad,
+      precio_unitario: l.producto?.precio_unitario ?? 0,
+      precio_total:    l.precio_total,
+    }))
+    const total = productos.reduce(
       (sum: number, p: any) => sum + Number(p.precio_total),
       0
     )
-    return { ...t, total }
+    const { lineas: _, ...ticketBase } = t
+    return { ...ticketBase, productos, total }
   })
 
   // Agrupar totales por categoría

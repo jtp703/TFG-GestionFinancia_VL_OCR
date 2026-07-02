@@ -364,3 +364,327 @@ vercel dev   # Puerto 3000
 > **Siguiente paso: probar el flujo completo con `vercel dev`** — subir una imagen real de ticket y verificar que el modelo OCR devuelve JSON válido.
 > **Siguiente fase tras validar el OCR: Fase 9 — QA y Deploy**.
 > Antes de empezar Fase 9: actualizar `plan.md`.
+
+---
+
+## Fase 9 — QA y Deploy (en curso)
+
+### Sesión 2026-04-12 — Tarea 9.4: USE_MOCK desactivado
+
+**Qué se hizo:**
+- Cambiado `const USE_MOCK = true` → `false` en `src/hooks/useTickets.ts:5`
+- El donut y la lista de gastos ahora consultan `/api/tickets` con el usuario autenticado real (Supabase)
+- Añadido try/catch en `getSession()` dentro del hook para evitar estado colgado si el token es inválido
+
+**Decisión:** El endpoint `/api/tickets` calcula el `total` de cada ticket sumando sus productos — no se necesita columna `total` en la tabla `ticket`. Bug E no requiere cambio de schema.
+
+**Cómo probar:**
+1. Desplegar en Vercel (push a `Feature-App-Stack`)
+2. Iniciar sesión en la app
+3. Si hay tickets guardados en Supabase del mes en curso → deben aparecer en el donut
+4. Si el donut aparece vacío pero hay tickets en Supabase → revisar la respuesta de `/api/tickets` en Network
+
+**Pendiente (manual en Supabase Dashboard):**
+- Tarea 9.1: Crear bucket `tickets` → Storage → New bucket → nombre `tickets` → Private ✅
+- Tarea 9.2: Añadir RLS policy INSERT Storage ✅
+
+---
+
+### Sesión 2026-04-12 — Tareas 9.3 + 9.5: Deduplicación de productos con tabla intermedia
+
+**Qué se hizo:**
+
+Rediseño del modelo de datos de productos para evitar duplicados en el catálogo:
+
+- `producto` pasa a ser un **catálogo compartido**: solo guarda `descripcion` y `precio_unitario`. Sin `ticket_id`, `cantidad` ni `precio_total`.
+- Nueva tabla **`ticket_producto`** (N:M): asocia un ticket con un producto y añade `cantidad` y `precio_total` de esa línea.
+- Índice único funcional `lower(descripcion), precio_unitario` — evita duplicados aunque el OCR devuelva mayúsculas/minúsculas inconsistentes.
+- `useScan.ts → guardar()`: antes de insertar un producto, busca en el catálogo por `ilike(descripcion)` + `precio_unitario`. Si existe, reutiliza el id. Si no, lo crea. Luego inserta en `ticket_producto`.
+- `api/tickets.ts`: la query ahora une a través de `ticket_producto` y aplana los datos al mismo formato `Producto` que espera el frontend — sin cambios en los componentes de UI.
+
+**Archivos modificados:**
+- `database/migration_ticket_producto.sql` — script de migración para ejecutar en Supabase SQL Editor
+- `database/schema.sql` — schema canónico actualizado
+- `src/hooks/useScan.ts` — función `guardar()` con deduplicación
+- `api/tickets.ts` — query a través de `ticket_producto`
+
+**Cómo aplicar (manual):**
+1. Supabase Dashboard → SQL Editor → pegar y ejecutar `database/migration_ticket_producto.sql`
+2. Desplegar en Vercel
+3. Escanear un ticket y verificar en Supabase que: se crea 1 fila en `ticket`, N filas en `ticket_producto`, y los productos en `producto` no se repiten si coinciden nombre+precio
+
+**Decisiones:**
+- El catálogo es compartido entre todos los usuarios (RLS abierto en lectura/insert para autenticados). Esto es correcto para v1.0 — los productos son datos objetivos (nombre + precio), no datos personales.
+- No se implementó UPDATE ni DELETE en `producto` — el catálogo es inmutable desde el frontend.
+
+---
+
+### Sesión 2026-04-12 — Tarea 9.6: Presupuesto mensual estimado vs. real
+
+**Qué se hizo:**
+
+- Nuevo hook `src/hooks/usePerfil.ts` — lee `gasto_mensual_estimado` y `ahorro_deseado` de `perfil_usuario` para el usuario autenticado.
+- Componente inline `PresupuestoBar` en `Home.tsx` — barra de progreso que compara el gasto real del mes con el estimado definido en el onboarding.
+- La barra solo se muestra si el usuario introdujo un `gasto_mensual_estimado > 0` en su perfil.
+- Colores adaptativos: verde < 75%, naranja 75–100%, rojo al exceder. Muestra euros restantes o excedidos.
+
+**Archivos modificados:**
+- `src/hooks/usePerfil.ts` — nuevo hook
+- `src/pages/Home.tsx` — `PresupuestoBar` + uso de `usePerfil`
+
+**Cómo probar:**
+1. Asegurarse de tener un valor en `gasto_mensual_estimado` en el perfil (columna en Supabase → tabla `perfil_usuario`).
+2. Abrir la pantalla de Gastos — debe aparecer la barra debajo del título y encima del donut.
+3. Si el campo es null o 0, la barra no aparece.
+
+---
+
+### Sesión 2026-04-12 — Tarea 9.7: Fix Storage bucket privado
+
+**Qué se hizo:**
+
+- `subirImagen()` en `useScan.ts` guardaba el resultado de `getPublicUrl()` — inaccesible en buckets privados.
+- Cambiado para devolver el `path` del archivo (`userId/timestamp.jpg`) en lugar de la URL.
+- `imagen_url` en la tabla `ticket` ahora almacena el path, no una URL.
+
+**Por qué:** El bucket `tickets` es privado (datos personales). Las URLs públicas no funcionan. Para mostrar la imagen en el futuro se debe llamar a `supabase.storage.from('tickets').createSignedUrl(path, 3600)` en el componente que la muestre.
+
+**Archivo modificado:** `src/hooks/useScan.ts` → función `subirImagen()`
+
+---
+
+### Sesión 2026-04-12 — Fix VerifyForm: fecha con selector de calendario
+
+**Qué se hizo:**
+- El campo fecha en `VerifyForm` era un input de texto libre — difícil de editar y propenso a errores de formato.
+- Cambiado a `<input type="date">` con normalización automática de `DD/MM/YYYY` → `YYYY-MM-DD` al montar.
+- `useScan.ts → toISODate()` ya manejaba el paso a ISO — sin cambios necesarios allí.
+
+**Por qué:** El usuario necesita poder cambiar la fecha del ticket para que caiga en el mes en curso y aparezca en el donut. El selector de calendario del sistema es la forma más segura.
+
+**Archivo modificado:** `src/components/VerifyForm.tsx`
+
+---
+
+### Sesión 2026-04-12 — Mejoras UI: donut clickable, drill-down con productos, perfil financiero
+
+**Qué se hizo:**
+
+**DonutChart:**
+- Los segmentos del donut ahora son clickables y abren el panel de la categoría correspondiente.
+- Eliminado el cuadrado negro de focus: `activeIndex={-1}` + `outline: none` en el chart y los segmentos.
+- Nuevo prop `onSelectCategoria` (opcional) — si no se pasa, el donut es solo visual.
+
+**DrillDown:**
+- Cada ticket es ahora expandible — al pulsar muestra sus productos.
+- Botón "Precio ↑/↓" para ordenar los productos por precio_total ascendente o descendente.
+- Estado de expansión independiente por ticket (uno abierto a la vez).
+
+**Perfil financiero en Home:**
+- `usePerfil` ahora también carga `gastos_fijos`.
+- Se muestra una tarjeta con el ahorro objetivo (€/mes) y los gastos fijos (texto libre del onboarding) cuando el usuario los haya rellenado.
+
+**Archivos modificados:**
+- `src/components/DonutChart.tsx`
+- `src/components/DrillDown.tsx`
+- `src/hooks/usePerfil.ts`
+- `src/pages/Home.tsx`
+
+---
+
+### Sesión 2026-04-12 — Gastos fijos, emojis, tema y rediseño Home
+
+**Qué se hizo:**
+
+**Gastos fijos en el donut:**
+- Nueva tabla `gasto_fijo` (usuario_id, nombre, precio, emoji, categoria_id, activo).
+- Hook `useGastosFijos` con CRUD completo: `crear`, `actualizar`, `eliminar` (soft delete con `activo=false`).
+- Los gastos fijos se suman a los totales por categoría en el donut (combinados con gastos de tickets).
+- Las categorías con algún gasto fijo muestran el icono 🔒 en `CategoriaList`.
+- En `DrillDown`, al abrir una categoría se muestra primero la sección "Gastos fijos" y luego los tickets.
+
+**Modal de gestión:**
+- `GastosFijosModal` — panel deslizante (igual estilo que DrillDown) con lista + formulario inline.
+- Formulario: selector de emoji (grid), nombre, importe mensual, categoría (dropdown Supabase).
+- Accesible desde botón "🔒 Fijos" en la cabecera de Home.
+
+**Sistema de emojis:**
+- `categoryColors.ts` exporta `getCategoryEmoji()` con mapa fijo para las 6 categorías del sistema.
+- `EMOJIS_GASTO` — lista de 25 emojis seleccionables para gastos fijos.
+- `CategoriaList` muestra el emoji en una burbuja coloreada en lugar del punto de color anterior.
+
+**Rediseño Home:**
+- Eliminados los dos paneles de presupuesto y ahorro.
+- Sustituidos por una mini barra de progreso de una línea bajo el título (solo visible si el usuario tiene gasto estimado configurado).
+- El donut se muestra también cuando hay gastos fijos aunque no haya tickets escaneados.
+
+**Tema claro/oscuro:**
+- Revisado `useTheme.ts` — implementación correcta: `localStorage` (instantáneo) + Supabase (sincronización entre dispositivos). Sin bug. Persiste correctamente entre recargas.
+
+**Archivos creados/modificados:**
+- `database/migration_gasto_fijo.sql` — ejecutar en Supabase SQL Editor
+- `database/schema.sql` — tabla `gasto_fijo` añadida
+- `src/lib/categoryColors.ts` — `getCategoryEmoji`, `EMOJIS_GASTO`
+- `src/hooks/useGastosFijos.ts` — nuevo hook CRUD
+- `src/components/GastosFijosModal.tsx` — nuevo componente
+- `src/components/CategoriaList.tsx` — emojis + candado
+- `src/components/DrillDown.tsx` — sección gastos fijos
+- `src/pages/Home.tsx` — rediseño completo
+
+---
+
+### Sesión 2026-04-12 — Barra de ahorro, fix navbar móvil, fix Scan móvil
+
+**Qué se hizo:**
+
+**Barra de presupuesto con zona de ahorro:**
+- La mini barra de progreso en Home ahora distingue entre presupuesto total y límite de gasto real (presupuesto − ahorro deseado).
+- Zona roja de fondo desde `pctLimite` hasta el final de la barra (reservada para ahorro).
+- Marcador naranja vertical en el punto exacto del límite de gasto.
+- El progreso verde se vuelve rojo si `totalCombinado` supera `limiteGasto`.
+- Texto junto a la barra: `{totalCombinado}€ / {limiteGasto}€` (el divisor es el límite real, no el presupuesto bruto).
+- Solo se renderiza si el usuario tiene `gasto_mensual_estimado > 0` en su perfil.
+
+**Fix navbar móvil — tapado por la barra del navegador:**
+- Problema: la barra de navegación inferior quedaba oculta bajo la barra de Chrome/Safari en iOS/Android.
+- Causa raíz: faltaba `viewport-fit=cover` en la meta viewport y el padding no usaba la variable de safe area.
+- Solución aplicada en tres puntos:
+  - `index.html`: añadido `viewport-fit=cover` a `<meta name="viewport">`.
+  - `BottomNav.tsx`: cambiado de altura fija `56px` + `items-center` a `items-end` con `paddingBottom: 'env(safe-area-inset-bottom, 8px)'`.
+  - `AppLayout.tsx`: cambiado `pb-14` por `paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 8px))'` en `<main>` para compensar el nav dinámico.
+
+**Fix vista Scan en móvil — botón de captura no pulsable:**
+- Problema: el botón de cámara quedaba cortado o no respondía al toque en dispositivos móviles.
+- Causa raíz: el contenedor raíz usaba `h-full`, que no se resuelve correctamente en un `flex-1` sin altura explícita en el padre (`<main>`).
+- Solución en `Scan.tsx`:
+  - Contenedor raíz: eliminado `h-full`, sustituido por `style={{ height: 'calc(100dvh - 64px - env(safe-area-inset-bottom, 8px))' }}`.
+  - Visor de cámara: cambiado de altura fija a `style={{ flex: '1 1 0', minHeight: 0 }}` para que ocupe el espacio disponible restante sin desbordarse.
+  - Los controles inferiores quedan siempre visibles al pie, con el botón circular correctamente centrado y pulsable.
+
+**Archivos modificados:**
+- `index.html` — `viewport-fit=cover`
+- `src/components/BottomNav.tsx` — safe area padding
+- `src/components/AppLayout.tsx` — padding dinámico en `<main>`
+- `src/pages/Scan.tsx` — altura con `100dvh` y `flex: '1 1 0'`
+
+---
+
+## Mejoras para v2 — Backlog de Requisitos Funcionales
+
+> Esta sección recoge las mejoras identificadas durante el desarrollo de v1.0 que no entraron en scope.
+> Formato RF (Requisito Funcional) para facilitar su incorporación en la memoria del TFG o en el planning de v2.
+
+---
+
+### RF-V2-01 — Historial de meses anteriores
+**Descripción:** El usuario puede navegar entre meses anteriores en la pantalla de Gastos.
+**Motivación:** Actualmente solo se muestra el mes en curso. El usuario no puede ver su historial.
+**Impacto:** Alto — funcionalidad básica de cualquier app de finanzas personales.
+**Requisitos técnicos:** Selector de mes en la cabecera de Home; parametrizar el rango de fechas en `/api/tickets`.
+
+---
+
+### RF-V2-02 — Edición de tickets guardados
+**Descripción:** El usuario puede editar un ticket ya guardado (corregir comercio, fecha, productos).
+**Motivación:** El OCR puede cometer errores que el usuario solo detecta después de guardar.
+**Impacto:** Alto — la verificación post-guardado es necesaria para mantener datos limpios.
+**Requisitos técnicos:** Endpoint PATCH `/api/tickets/:id`; reutilizar `VerifyForm` en modo edición.
+
+---
+
+### RF-V2-03 — Eliminación de tickets
+**Descripción:** El usuario puede eliminar un ticket guardado (con confirmación).
+**Motivación:** Corrección de errores o duplicados no detectados.
+**Impacto:** Medio.
+**Requisitos técnicos:** Soft delete (`eliminado = true`) en tabla `ticket`; filtrar en `/api/tickets`.
+
+---
+
+### RF-V2-04 — Modelo OCR de mayor calidad
+**Descripción:** Sustituir el pipeline OCR.space + DeepSeek-chat por un LLM con visión (GPT-4o mini, Gemini Flash, Claude Haiku) que procese imagen → JSON en un solo paso.
+**Motivación:** OCR.space tiene calidad limitada con tickets de baja resolución o letra pequeña. El pipeline de dos pasos introduce latencia y puntos de fallo.
+**Impacto:** Alto — calidad del producto principal.
+**Hoja de ruta:** OCR.space+DeepSeek (v1) → LLM visión (v2) → modelo fine-tuned propio (v3 si el tiempo lo permite).
+
+---
+
+### RF-V2-05 — Notificaciones de presupuesto
+**Descripción:** Alerta al usuario cuando supera el 80% y el 100% del gasto mensual estimado.
+**Motivación:** El indicador visual existe pero es pasivo — el usuario tiene que abrir la app.
+**Impacto:** Medio — mejora el valor de la app de finanzas.
+**Requisitos técnicos:** Push notifications (web push API) o email via Supabase Edge Functions.
+
+---
+
+### RF-V2-06 — Categorías personalizables
+**Descripción:** El usuario puede crear, renombrar y asignar color/emoji a sus propias categorías.
+**Motivación:** Las 6 categorías fijas no cubren todos los casos de uso (ej: mascotas, viajes, regalos).
+**Impacto:** Medio.
+**Requisitos técnicos:** Tabla `categoria_usuario`; lógica de fallback a categorías del sistema.
+
+---
+
+### RF-V2-07 — Exportación de datos
+**Descripción:** El usuario puede exportar sus gastos del mes (o un rango) en CSV o PDF.
+**Motivación:** Utilidad para declaración de impuestos, seguimiento personal o transferencia a otras apps.
+**Impacto:** Bajo-medio.
+**Requisitos técnicos:** Endpoint GET `/api/export?format=csv&from=&to=`; generación de PDF con jsPDF o similar.
+
+---
+
+### RF-V2-08 — Imagen del ticket visible en detalle
+**Descripción:** Al abrir un ticket en DrillDown, el usuario puede ver la foto del ticket escaneado.
+**Motivación:** Útil para verificar el OCR o recordar compras.
+**Requisitos técnicos:** `supabase.storage.createSignedUrl(path, 3600)` en el componente de detalle; `imagen_url` ya guarda el path.
+
+---
+
+### RF-V2-09 — Modo compartido / multi-usuario por hogar
+**Descripción:** Varios usuarios pueden compartir un "hogar" y ver gastos combinados.
+**Motivación:** Parejas o familias que comparten presupuesto.
+**Impacto:** Alto en diferenciación, alto en complejidad.
+**Requisitos técnicos:** Tabla `hogar`; invitaciones; RLS por `hogar_id`.
+
+---
+
+### RF-V2-10 — Gestión del perfil financiero desde la app
+**Descripción:** El usuario puede modificar su gasto estimado, ahorro deseado y gastos fijos desde la pantalla de Cuenta (sin tener que pasar por el onboarding).
+**Motivación:** Los valores introducidos en el onboarding pueden cambiar con el tiempo.
+**Impacto:** Medio — mejora la usabilidad del perfil.
+**Requisitos técnicos:** Formulario editable en `Cuenta.tsx`; PATCH a `perfil_usuario`.
+
+---
+
+## Fase 10 — Admin Dashboard + Consentimiento de Entrenamiento (2026-05-25)
+
+### Qué se hizo
+
+**Rol administrador:**
+- Migración SQL (`database/migration_admin_consent.sql`): columna `role TEXT DEFAULT 'user'` en `perfil_usuario` y columna `consentimiento_entrenamiento BOOLEAN DEFAULT NULL` en `ticket`.
+- 3 endpoints Vercel Function bajo `api/admin/`: `users.ts`, `tickets.ts`, `export.ts`. Todos verifican Bearer token + `role='admin'` antes de operar.
+- `useAdminData.ts`: hook que orquesta las llamadas admin (lista usuarios, tickets por usuario, descarga JSONL).
+- `AdminPanel.tsx`: componente con lista de usuarios expandible, tabla de tickets con JSON colapsable, y botón de exportación. Solo visible en `Cuenta.tsx` si `perfil.role === 'admin'`.
+- `usePerfil.ts` ampliado para incluir el campo `role` en el SELECT.
+- `Cuenta.tsx` reorganizado en dos contenedores: `max-w-sm` para ajustes de cuenta, `max-w-4xl` para el panel admin.
+
+**Consentimiento de entrenamiento:**
+- `ConsentDialog.tsx`: dialog post-scan. Aparece tras guardar un ticket exitosamente.
+- `ScanContext.tsx`: estado `consent` añadido a la máquina de estados; `ticketGuardadoId` se rellena al guardar y se expone en el context.
+- `Scan.tsx`: renderiza `<ConsentDialog>` cuando `estado === 'consent'`; al responder llama `cancelar()` + `navigate('/')`.
+
+### Decisiones tomadas
+
+- **Seguridad admin vía service_role**: las rutas admin usan `SUPABASE_SERVICE_ROLE_KEY` server-side (bypass RLS). El frontend nunca accede a datos de otros usuarios directamente.
+- **Signed URLs para export**: las imágenes del JSONL exportado incluyen signed URLs de 7 días. El admin puede descargar el JSONL y luego las imágenes por separado con scripts.
+- **Consentimiento opcional**: `null` = no preguntado aún, `true` = acepta, `false` = rechaza (aunque el dialog no setea `false`, deja `null`). Solo los `true` se incluyen en el export por defecto.
+- **Layout admin desacoplado**: `AdminPanel` renderiza fuera del `max-w-sm` de ajustes de cuenta para dar espacio a las tablas.
+
+### Cómo probar
+
+1. **Migración**: ejecutar `database/migration_admin_consent.sql` en Supabase SQL Editor.
+2. **Crear admin**: `UPDATE perfil_usuario SET role = 'admin' WHERE id = '<tu-uuid>';`
+3. **Panel admin**: login con el admin → ir a Cuenta → verificar que aparece "Panel de Administración" con lista de usuarios.
+4. **Expandir usuario**: click en un usuario → ver sus tickets con columna JSON.
+5. **Exportar**: click "Exportar dataset (N)" → descarga `scannet_export_YYYY-MM-DD.jsonl`.
+6. **Consentimiento**: escanear un ticket → verificar → guardar → aparece el ConsentDialog → "Sí, contribuir" → verificar en Supabase que `consentimiento_entrenamiento = true`.
+7. **Seguridad**: como usuario normal, llamar a `/api/admin/users` con su token → debe devolver 403.

@@ -25,3 +25,25 @@ export function getCategoryColor(nombre: string, isDark: boolean): string {
   const palette = isDark ? ELECTRIC : PASTEL
   return palette[nombre] ?? (isDark ? '#94A3B8' : '#B0B8C1')
 }
+
+/** Emoji fijo por categoría del sistema */
+const CATEGORY_EMOJI: Record<string, string> = {
+  'Alimentación': '🛒',
+  'Transporte':   '🚗',
+  'Ocio':         '🎬',
+  'Hogar':        '🏠',
+  'Salud':        '💊',
+  'Otros':        '📦',
+  'Sin categoría':'❓',
+}
+
+export function getCategoryEmoji(nombre: string): string {
+  return CATEGORY_EMOJI[nombre] ?? '📦'
+}
+
+/** Emojis disponibles para gastos fijos */
+export const EMOJIS_GASTO = [
+  '🏠','🚗','⚡','💧','📱','🌐','🎬','🎮','🏋️',
+  '🍕','☕','🎓','📚','✈️','🐶','👕','💊','🏦',
+  '🔑','📦','💰','🎵','🎭','🚂','🧹',
+]

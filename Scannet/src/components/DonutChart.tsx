@@ -6,23 +6,26 @@ import { useTheme } from '@/hooks/useTheme'
 interface Props {
   totalesPorCategoria: Record<string, TotalCategoria>
   totalMes: number
+  onSelectCategoria?: (catId: string) => void
 }
 
-/** Gráfico de dona con el total del mes en el centro. Colores pastel en claro, eléctricos en oscuro. */
-export function DonutChart({ totalesPorCategoria, totalMes }: Props) {
+/** Gráfico de dona con el total del mes en el centro. Colores pastel en claro, eléctricos en oscuro.
+ *  Al pulsar un segmento llama a onSelectCategoria con el id de la categoría. */
+export function DonutChart({ totalesPorCategoria, totalMes, onSelectCategoria }: Props) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const data = Object.entries(totalesPorCategoria).map(([, cat]) => ({
+  const data = Object.entries(totalesPorCategoria).map(([catId, cat]) => ({
+    catId,
     name:  cat.nombre,
     value: cat.total,
     color: getCategoryColor(cat.nombre, isDark),
   }))
 
   return (
-    <div className="relative w-full" style={{ height: 220 }}>
+    <div className="relative w-full" style={{ height: 220, outline: 'none' }}>
       <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
+        <PieChart style={{ outline: 'none', cursor: onSelectCategoria ? 'pointer' : 'default' }}>
           <Pie
             data={data}
             cx="50%"
@@ -32,9 +35,11 @@ export function DonutChart({ totalesPorCategoria, totalMes }: Props) {
             paddingAngle={2}
             dataKey="value"
             strokeWidth={0}
+            activeIndex={-1}
+            onClick={(entry) => onSelectCategoria?.(entry.catId)}
           >
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
+              <Cell key={i} fill={entry.color} style={{ outline: 'none' }} />
             ))}
           </Pie>
         </PieChart>

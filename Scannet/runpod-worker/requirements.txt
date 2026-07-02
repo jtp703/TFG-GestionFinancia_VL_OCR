@@ -1,0 +1,14 @@
+runpod==1.7.3
+# Versión exacta requerida — NO actualizar: versiones superiores rompen DeepseekV2MoE
+transformers==4.56.2
+peft
+accelerate
+# torch NO se instala aquí — la imagen base runpod/pytorch:2.2.1 ya lo incluye
+# con los bindings CUDA correctos. Reinstalarlo vía pip rompe la integración GPU.
+pillow
+huggingface_hub
+addict
+safetensors
+sentencepiece
+matplotlib
+tqdm

@@ -1,21 +1,52 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ResultadoOCR, ProductoOCR, MetodoPago } from '../hooks/useScan'
+import { notify } from '../lib/toast'
+
+export interface VerifyFormState {
+  comercio: string
+  fecha:    string
+  metodo:   MetodoPago
+  items:    ProductoOCR[]
+}
 
 interface Props {
   inicial:     ResultadoOCR
   duplicado:   boolean
-  onConfirmar: (datos: ResultadoOCR) => void
+  state:       VerifyFormState
+  setState:    React.Dispatch<React.SetStateAction<VerifyFormState>>
+  onConfirmar: (datos: ResultadoOCR) => Promise<void>
   onCancelar:  () => void
 }
 
 /** Tabla de verificación editable post-OCR */
-export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar }: Props) {
-  const [comercio, setComercio]   = useState(inicial.comercio)
-  const [fecha, setFecha]         = useState(inicial.fecha)
-  const [metodo, setMetodo]       = useState<MetodoPago>(inicial.metodo_pago)
-  const [items, setItems]         = useState<ProductoOCR[]>(inicial.items)
+export default function VerifyForm({ inicial, duplicado, state, setState, onConfirmar, onCancelar }: Props) {
+  const [guardando, setGuardando]         = useState(false)
+  const [confirmando, setConfirmando]     = useState(false)
+  const [intentoGuardar, setIntentoGuardar] = useState(false)
+  const topRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const { comercio, fecha, metodo, items } = state
+  const setComercio = (v: string)     => setState(s => ({ ...s, comercio: v }))
+  const setFecha    = (v: string)     => setState(s => ({ ...s, fecha: v }))
+  const setMetodo   = (v: MetodoPago) => setState(s => ({ ...s, metodo: v }))
+  const setItems    = (updater: (prev: ProductoOCR[]) => ProductoOCR[]) =>
+    setState(s => ({ ...s, items: updater(s.items) }))
 
   const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
+
+  /** Valida todos los campos y devuelve el primer error, o null si todo está bien */
+  function validar(): string | null {
+    if (!comercio.trim())                               return 'El nombre del comercio es obligatorio'
+    if (!fecha)                                          return 'La fecha es obligatoria'
+    if (total <= 0)                                      return 'El total no puede ser 0 €'
+    if (items.some(i => !i.descripcion.trim()))          return 'Todos los productos deben tener descripción'
+    if (items.some(i => i.cantidad <= 0))                return 'La cantidad de cada producto debe ser mayor que 0'
+    return null
+  }
 
   function updateItem(index: number, field: keyof ProductoOCR, value: string) {
     setItems(prev => prev.map((item, i) =>
@@ -33,22 +64,62 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
     setItems(prev => prev.filter((_, i) => i !== index))
   }
 
-  function handleConfirmar() {
-    onConfirmar({ ...inicial, comercio, fecha, total, metodo_pago: metodo, items })
+  async function handleGuardarConfirmado() {
+    setConfirmando(false)
+    setGuardando(true)
+    try {
+      await onConfirmar({ ...inicial, comercio, fecha, total, metodo_pago: metodo, items })
+    } finally {
+      setGuardando(false)
+    }
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: 'var(--surface)',
-    color: 'var(--text-primary)',
-    border: '1px solid var(--border)',
-    borderRadius: '6px',
-    padding: '4px 8px',
-    fontSize: '0.875rem',
-    width: '100%',
+  function inputStyle(invalid = false): React.CSSProperties {
+    return {
+      background:   'var(--surface)',
+      color:        'var(--text-primary)',
+      border:       `1px solid ${invalid ? '#ef4444' : 'var(--border)'}`,
+      borderRadius: '6px',
+      padding:      '4px 8px',
+      fontSize:     '0.875rem',
+      width:        '100%',
+    }
   }
 
   return (
-    <div style={{ color: 'var(--text-primary)' }} className="space-y-5">
+    <div ref={topRef} style={{ color: 'var(--text-primary)' }} className="space-y-5 relative">
+      {/* Dialog de confirmación — overlay sobre el form */}
+      {confirmando && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}>
+          <div className="rounded-2xl p-6 mx-4 w-full max-w-xs space-y-4 shadow-xl"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <p className="text-base font-semibold text-center" style={{ color: 'var(--text-primary)' }}>
+              ¿Todo es correcto?
+            </p>
+            <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
+              <p><span className="font-medium" style={{ color: 'var(--text-primary)' }}>{comercio}</span></p>
+              <p>{fecha} · {metodo}</p>
+              <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{total.toFixed(2)} €</p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmando(false)}
+                className="flex-1 py-2 rounded-xl text-sm transition-opacity hover:opacity-70"
+                style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                Revisar
+              </button>
+              <button
+                onClick={handleGuardarConfirmado}
+                className="flex-1 py-2 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--color-brand)', color: '#fff' }}>
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {duplicado && (
         <div className="rounded-lg px-4 py-3 text-sm font-medium"
           style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
@@ -59,12 +130,16 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
       {/* Campos cabecera */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Comercio</label>
-          <input style={inputStyle} value={comercio} onChange={e => setComercio(e.target.value)} />
+          <label className="block text-xs mb-1" style={{ color: intentoGuardar && !comercio.trim() ? '#ef4444' : 'var(--text-muted)' }}>
+            Comercio {intentoGuardar && !comercio.trim() && '— obligatorio'}
+          </label>
+          <input style={inputStyle(intentoGuardar && !comercio.trim())} value={comercio} onChange={e => setComercio(e.target.value)} />
         </div>
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Fecha</label>
-          <input style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} />
+          <label className="block text-xs mb-1" style={{ color: intentoGuardar && !fecha ? '#ef4444' : 'var(--text-muted)' }}>
+            Fecha {intentoGuardar && !fecha && '— obligatoria'}
+          </label>
+          <input type="date" style={inputStyle(intentoGuardar && !fecha)} value={fecha} onChange={e => setFecha(e.target.value)} />
         </div>
       </div>
 
@@ -92,20 +167,18 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
       <div>
         <label className="block text-xs mb-2" style={{ color: 'var(--text-muted)' }}>Productos</label>
         <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-          {/* Cabecera */}
           <div className="grid text-xs px-3 py-2"
             style={{ gridTemplateColumns: '1fr 60px 70px 24px', gap: '8px', background: 'var(--bg)', color: 'var(--text-muted)' }}>
             <span>Descripción</span><span className="text-center">Cant.</span><span className="text-right">Precio</span><span />
           </div>
-          {/* Filas */}
           {items.map((item, i) => (
             <div key={i} className="grid items-center px-3 py-1.5"
               style={{ gridTemplateColumns: '1fr 60px 70px 24px', gap: '8px', borderTop: '1px solid var(--border)' }}>
-              <input style={inputStyle} value={item.descripcion}
+              <input style={inputStyle(intentoGuardar && !item.descripcion.trim())} value={item.descripcion}
                 onChange={e => updateItem(i, 'descripcion', e.target.value)} />
-              <input style={{ ...inputStyle, textAlign: 'center' }} type="number" min="1" value={item.cantidad}
+              <input style={{ ...inputStyle(intentoGuardar && item.cantidad <= 0), textAlign: 'center' }} type="number" min="1" value={item.cantidad}
                 onChange={e => updateItem(i, 'cantidad', e.target.value)} />
-              <input style={{ ...inputStyle, textAlign: 'right' }} type="number" step="0.01" min="0" value={item.precio}
+              <input style={{ ...inputStyle(), textAlign: 'right' }} type="number" step="0.01" min="0" value={item.precio}
                 onChange={e => updateItem(i, 'precio', e.target.value)} />
               <button onClick={() => removeItem(i)}
                 className="text-center leading-none transition-opacity hover:opacity-60"
@@ -134,10 +207,17 @@ export default function VerifyForm({ inicial, duplicado, onConfirmar, onCancelar
           style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
           Cancelar
         </button>
-        <button onClick={handleConfirmar}
-          className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-90"
+        <button
+          onClick={() => {
+            setIntentoGuardar(true)
+            const error = validar()
+            if (error) { notify.err(error); return }
+            setConfirmando(true)
+          }}
+          disabled={guardando}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-brand)', color: '#fff' }}>
-          Confirmar y guardar
+          {guardando ? 'Guardando…' : 'Confirmar y guardar'}
         </button>
       </div>
     </div>
