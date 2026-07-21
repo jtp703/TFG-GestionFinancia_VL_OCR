@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { checkRateLimit } from './_lib/rateLimit'
+import { checkRateLimit } from './_lib/rateLimit.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -42,10 +42,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const itemsDesc = ((items ?? []) as any[]).slice(0, 8).map((i: any) => i.descripcion).filter(Boolean).join(', ')
   const contexto = itemsDesc ? `\nProductos del ticket: ${itemsDesc}` : ''
-  const prompt = `Clasifica este establecimiento en exactamente una de estas categorías: ${CATEGORIAS.join(', ')}.
-Nota: bares, cafeterías, restaurantes y cualquier establecimiento de comida o bebida preparada → Ocio.
-Comercio: "${comercio}"${contexto}
-Responde únicamente con el nombre de la categoría, sin explicación ni puntuación adicional.`
+  const prompt = `You are classifying Spanish merchants. Follow these steps:
+    1. First, identify what type of business "${comercio}" is in Spain (use your knowledge of Spanish chains and common business names).
+    2. Then, classify it into exactly one of these categories: ${CATEGORIAS.join(', ')}.
+
+    Rules:
+    - Bars, coffee shops, restaurants, and any establishment serving prepared food or drinks → Ocio.
+    - Supermarkets and grocery stores (e.g., Mercadona, Dia, Coviran, Carrefour) → Alimentacion.
+    ${contexto}
+    Respond ONLY with valid JSON, no markdown, in this format:
+    {"business_type": "<brief description>", "category": "<category name>"}`
 
   try {
     const response = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
